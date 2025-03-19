@@ -1,14 +1,27 @@
 #include <stdio.h>
 #include <windows.h>
+#include <stdint.h>
 
-#define ASSERT(Exp) do { if (!(Exp)) DebugBreak(); } while (0)
-#define ARRAY_SIZE(Arr) (sizeof(Arr) / sizeof(Arr[0]))
+using u8 = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+using s8 = int8_t;
+using s16 = int16_t;
+using s32 = int32_t;
+using s64 = int64_t;
+
 using byte = unsigned char;
 
-byte* ReadFile(const char* Filename, int* OutSize)
+#define ASSERT(Exp) do { if (!(Exp)) DebugBreak(); } while (0)
+#define ARRAY_SIZE(Arr) (sizeof((Arr)) / sizeof((Arr)[0]))
+
+byte* ReadFile(const char* FileName, int* OutSize)
 {
+    ASSERT(FileName);
+    ASSERT(OutSize);
     FILE* FileHandle = nullptr;
-    fopen_s(&FileHandle, Filename, "rb");
+    fopen_s(&FileHandle, FileName, "rb");
 
     byte* Result = nullptr;
     *OutSize = 0;
@@ -35,13 +48,13 @@ byte* ReadFile(const char* Filename, int* OutSize)
     return Result;
 }
 
-void WriteFile(const char* Filename, byte* Data, int Size)
+void WriteFile(const char* FileName, byte* Data, int Size)
 {
-    ASSERT(Filename);
+    ASSERT(FileName);
     ASSERT(Data);
     ASSERT(Size > 0);
     FILE* FileHandle = nullptr;
-    fopen_s(&FileHandle, Filename, "wb");
+    fopen_s(&FileHandle, FileName, "wb");
 
     if (FileHandle)
     {
@@ -91,6 +104,33 @@ enum OpCodeType
     Op_Cmp,
     Op_Jmp,
     Op_Invalid
+};
+
+struct InstState
+{
+    int OpCodeID;
+    int ByteCount; // Number of bytes in memory
+    int Ops[2]; // Dst == [0], Src == [1]
+
+    bool bMode;
+    bool bReg;
+    bool bRM;
+
+    int Mode; // 2 bits, if present
+    int Reg; // 3 bits, if present
+    int RM; // 3 bits, if present
+
+    bool bFlagD;
+    bool bFlagW;
+    // TODO: Other single-bit flags here;
+
+    bool bData;
+    bool bDataIsWide;
+    int Data;
+
+    bool bDisp;
+    bool bDispIsWide;
+    int Disp;
 };
 
 constexpr int BufferSize = 32;
@@ -410,13 +450,13 @@ int WriteEffAddrToBuffer(char* Buffer, int Mode, int R_M, bool bWide, byte* pOpt
     }
 }
 
-void DecodeAsm(const char* Filename)
+void DecodeAsm(const char* FileName)
 {
     int Size = 0;
-    byte* Data = ReadFile(Filename, &Size);
+    byte* Data = ReadFile(FileName, &Size);
     if (!Data) { return; }
 
-    printf("; %s:\n", Filename);
+    printf("; %s:\n", FileName);
 
     char Dst[BufferSize];
     char Src[BufferSize];
@@ -751,12 +791,15 @@ void DecodeAsm(const char* Filename)
     printf("\n");
 }
 
-int main()
+int main(int ArgCount, const char* ArgValues[])
 {
-    DecodeAsm("input/listing_0037_single_register_mov");
-    DecodeAsm("input/listing_0038_many_register_mov");
-    DecodeAsm("input/listing_0039_more_movs");
-    DecodeAsm("input/listing_0040_challenge_movs");
-    DecodeAsm("input/listing_0041_add_sub_cmp_jnz");
+    if (ArgCount > 1)
+    {
+        int ArgIdx = 1;
+        while (ArgIdx < ArgCount)
+        {
+            DecodeAsm(ArgValues[ArgIdx++]);
+        }
+    }
     return 0;
 }
