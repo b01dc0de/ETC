@@ -1,20 +1,5 @@
-#include <stdio.h>
-#include <windows.h>
-#include <stdint.h>
-
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-
-using byte = unsigned char;
-
-#define ASSERT(Exp) do { if (!(Exp)) DebugBreak(); } while (0)
-#define ARRAY_SIZE(Arr) (sizeof((Arr)) / sizeof((Arr)[0]))
+#include "decode86_common.h"
+#include "decode86_common.cpp"
 
 byte* ReadFile(const char* FileName, int* OutSize)
 {
@@ -104,33 +89,6 @@ enum OpCodeType
     Op_Cmp,
     Op_Jmp,
     Op_Invalid
-};
-
-struct InstState
-{
-    int OpCodeID;
-    int ByteCount; // Number of bytes in memory
-    int Ops[2]; // Dst == [0], Src == [1]
-
-    bool bMode;
-    bool bReg;
-    bool bRM;
-
-    int Mode; // 2 bits, if present
-    int Reg; // 3 bits, if present
-    int RM; // 3 bits, if present
-
-    bool bFlagD;
-    bool bFlagW;
-    // TODO: Other single-bit flags here;
-
-    bool bData;
-    bool bDataIsWide;
-    int Data;
-
-    bool bDisp;
-    bool bDispIsWide;
-    int Disp;
 };
 
 constexpr int BufferSize = 32;
@@ -312,7 +270,7 @@ int ParseAndWriteInstNameAndType(byte* NextInst, char* OutInst, InstCaseType* Ou
         { "jnb", "jae" }, // Jump on not below/above or equal
         { "jnbe", "ja" }, // Jump on not below or equal/above
         { "jnp", "jpo" }, // Jump on not par/par odd
-    }
+    };
     static_assert(ARRAY_SIZE(JumpInstValuesCommon) == ARRAY_SIZE(JumpInstNameValuesCommon), "Should be equal!");
     static_assert(ARRAY_SIZE(JumpInstValues) == ARRAY_SIZE(JumpInstNameValues), "Should be equal!");
     for (int CommonIdx = 0; CommonIdx < ARRAY_SIZE(JumpInstValuesCommon); CommonIdx++)
@@ -429,6 +387,7 @@ int WriteEffAddrToBuffer(char* Buffer, int Mode, int R_M, bool bWide, byte* pOpt
         default:
         {
             DebugBreak();
+            return 0;
         } break;
     }
 }
