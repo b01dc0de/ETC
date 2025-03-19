@@ -8,14 +8,31 @@ enum RegisterType : u8
 {
     Reg_Invalid,
     Reg_a,
-    Reg_b,
     Reg_c,
     Reg_d,
+    Reg_b,
     Reg_sp,
     Reg_bp,
     Reg_si,
     Reg_di,
     Reg_Count
+};
+
+RegisterType GetReg(u8 Val)
+{
+    RegisterType Result = Reg_Invalid;
+    if (0 <= Val && Val < 7)
+    {
+        Result = (RegisterType)(Val + 1);
+    }
+    return Result;
+}
+
+struct RegisterDesc
+{
+    RegisterType Type;
+    bool bWide;
+    bool bHigh;
 };
 
 enum EffAddrType : u8
@@ -31,12 +48,15 @@ enum EffAddrType : u8
     EffAddr_Count
 };
 
-struct RegisterDesc
+EffAddrType GetEffAddr(u8 Val)
 {
-    RegisterType Type;
-    bool bWide;
-    bool bHigh;
-};
+    EffAddrType Result = EffAddr_Invalid;
+    if (0 <= Val && Val < 7)
+    {
+        Result = (EffAddrType)(Val + 1);
+    }
+    return Result;
+}
 
 struct DataDesc
 {
@@ -190,6 +210,8 @@ enum InstDescFlags
     InstF_RM = 1 << 6,
     InstF_Disp = 1 << 7,
     InstF_Data = 1 << 8,
+    InstF_DstAcc = 1 << 9,
+    InstF_SrcAcc = 1 << 10
 };
 
 struct InstructionFormatDesc
@@ -214,30 +236,30 @@ InstructionFormatDesc InstDescTable[] =
     // mov - Immediate to register
     { OpCode_Mov, 0b1011, 4, InstF_BitW|InstF_Reg|InstF_Data },
     // mov - Memory to accumulator
-    { OpCode_Mov, 0b1010000, 7, InstF_Data },
+    { OpCode_Mov, 0b1010000, 7, InstF_Data|InstF_DstAcc },
     // mov - Accumulator to memory
-    { OpCode_Mov, 0b1010001, 7, InstF_Data },
+    { OpCode_Mov, 0b1010001, 7, InstF_Data|InstF_SrcAcc },
 
     // add - Reg/memory with register to either
     { OpCode_Add, 0b000000, 6, InstF_BitD|InstF_BitW|InstF_Mode|InstF_Reg|InstF_RM|InstF_Disp },
     // add - Immediate to register/memory
     { OpCode_Add, 0b100000, 6, InstF_BitS|InstF_BitW|InstF_Mode|InstF_CompareReg|InstF_Disp|InstF_Data, 0b000 },
     // add - Immediate to accumulator
-    { OpCode_Add, 0b0000010, 7, InstF_BitW|InstF_Data },
+    { OpCode_Add, 0b0000010, 7, InstF_BitW|InstF_Data|InstF_DstAcc },
 
     // sub - Reg/memory and register to either
     { OpCode_Sub, 0b001010, 6, InstF_BitD|InstF_BitW|InstF_Mode|InstF_Reg|InstF_RM|InstF_Disp },
     // sub - Immediate from register/memory
     { OpCode_Sub, 0b100000, 6, InstF_BitS|InstF_BitW|InstF_Mode|InstF_CompareReg|InstF_RM|InstF_Disp|InstF_Data },
     // sub - Immediate from accumulator
-    { OpCode_Sub, 0b0010110, 7, InstF_BitW|InstF_Data },
+    { OpCode_Sub, 0b0010110, 7, InstF_BitW|InstF_Data|InstF_DstAcc },
 
     // cmp - Register/memory and register
     { OpCode_Cmp, 0b001110, 6, InstF_BitD|InstF_BitW|InstF_Mode|InstF_Reg|InstF_RM|InstF_Disp },
     // cmp - Immediate with register/memory
     { OpCode_Cmp, 0b100000, 6, InstF_BitS|InstF_BitW|InstF_Mode|InstF_CompareReg|InstF_RM|InstF_Disp|InstF_Data, 0x111 },
     // cmp - Immediate with accumulator
-    { OpCode_Cmp, 0b0011110, 7, InstF_BitW|InstF_Data },
+    { OpCode_Cmp, 0b0011110, 7, InstF_BitW|InstF_Data|InstF_DstAcc },
 
     // TODO: Jumps
 };
@@ -323,6 +345,79 @@ DecodeStateT InitDecodeState()
         Result.bData = false;
         Result.bDataWide = false;
         Result.DataValue = 0;
+    }
+    return Result;
+}
+
+OperandDesc GetOperandDesc(DecodeStateT* pDecodeState, bool bSrc)
+{
+    OperandDesc Result = {};
+    if (pDecodeState->bDisp)
+    {
+        Result.Type = Operand_EffAddrDisp;
+    }
+    else if (pDecodeState->bData)
+    {
+        Result.Type = Operand_Imm;
+    }
+    else if (pDecodeState->bMode)
+    {
+        switch (pDecodeState->ModeValue)
+        {
+            case 0: Result.Type = Operand_EffAddr; break;
+            case 3: Result.Type = Operand_Reg; break;
+            case 1: case 2: default: DebugBreak(); break;
+        }
+    }
+    switch (Result.Type)
+    {
+        case Operand_Reg:
+        {
+            Result.Reg.bWide = pDecodeState->bFlagWide;
+            constexpr u8 bHighMin = 4;
+            if (pDecodeState->bFlagDirection == bSrc)
+            {
+                ASSERT(pDecodeState->bRM);
+                Result.Reg.Type = GetReg(pDecodeState->RMValue);
+                Result.Reg.bHigh = !pDecodeState->bFlagWide && pDecodeState->RMValue >= bHighMin;
+            }
+            else
+            {
+                ASSERT(pDecodeState->bReg);
+                Result.Reg.Type = GetReg(pDecodeState->RegValue);
+                Result.Reg.bHigh = !pDecodeState->bFlagWide && pDecodeState->RegValue >= bHighMin;
+            }
+        } break;
+        case Operand_EffAddr:
+        case Operand_EffAddrDisp:
+        {
+            if (pDecodeState->bFlagDirection == bSrc)
+            {
+                ASSERT(pDecodeState->bRM);
+                Result.EffAddr.Type = GetEffAddr(pDecodeState->RMValue);
+            }
+            else
+            {
+                ASSERT(pDecodeState->bReg);
+                Result.EffAddr.Type = GetEffAddr(pDecodeState->RegValue);
+            }
+            Result.EffAddr.Disp = {};
+            Result.EffAddr.Disp.bPresent = Result.Type == Operand_EffAddrDisp;
+            if (Result.EffAddr.Disp.bPresent)
+            {
+                Result.EffAddr.Disp.bWide = pDecodeState->bFlagWide;
+                if (Result.EffAddr.Disp.bWide) { Result.EffAddr.Disp.Data16 = pDecodeState->DispValue; }
+                else { Result.EffAddr.Disp.Data8 = pDecodeState->DispValue; }
+            }
+        } break;
+        case Operand_Imm:
+        {
+            Result.Imm.bPresent = true;
+            Result.Imm.bWide = pDecodeState->bFlagWide;
+            if (Result.Imm.bWide) { Result.Imm.Data16 = pDecodeState->DataValue; }
+            else { Result.Imm.Data8 = pDecodeState->DataValue; }
+        } break;
+        case Operand_Invalid: default: { DebugBreak(); } break;
     }
     return Result;
 }
@@ -455,8 +550,38 @@ DecodedInst DecodeInst(InstructionFormatDesc InstDesc, u8* Inst)
     }
 
     {
-        Result.Operands[0] = {};
-        Result.Operands[1] = {};
+        // NOTE:
+        // OperandDesc: OperandType Type; ( RegisterDesc Reg; EffAddrDesc EffAddr; DataDesc Imm; )
+
+        if (InstDesc.Flags & InstF_DstAcc)
+        {
+            Result.Operands[0].Type = Operand_Reg;
+            Result.Operands[0].Reg.Type = Reg_a;
+            Result.Operands[0].Reg.bHigh = false; // TODO: Is this always false?
+            Result.Operands[0].Reg.bWide = DecodeState.bDataWide;
+            Result.Operands[1] = GetOperandDesc(&DecodeState, 1);
+        }
+        else if (InstDesc.Flags & InstF_SrcAcc)
+        {
+            Result.Operands[0] = GetOperandDesc(&DecodeState, 0);
+            Result.Operands[1].Type = Operand_Reg;
+            Result.Operands[1].Reg.Type = Reg_a;
+            Result.Operands[1].Reg.bHigh = false; // TODO: Is this always false?
+            Result.Operands[1].Reg.bWide = DecodeState.bDataWide;
+        }
+        else
+        {
+            if (DecodeState.bFlagDirection)
+            {
+                Result.Operands[1] = GetOperandDesc(&DecodeState, 0);
+                Result.Operands[0] = GetOperandDesc(&DecodeState, 1);
+            }
+            else
+            {
+                Result.Operands[0] = GetOperandDesc(&DecodeState, 0);
+                Result.Operands[1] = GetOperandDesc(&DecodeState, 1);
+            }
+        }
     }
 
     return Result;
