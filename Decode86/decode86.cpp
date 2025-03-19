@@ -298,38 +298,21 @@ int ParseAndWriteInstNameAndType(byte* NextInst, char* OutInst, InstCaseType* Ou
         0x77, // 0111 0111 // Jump on not below or equal/above
         0x7B, // 0111 1011 // Jump on not par/par odd
     };
-    const char* JumpInstNameValues[] =
+    const char* JumpInstNameValues[][2] =
     {
-        "je", // jump on equal
-        "jl", // jump on less
-        "jle", // jump on less or equal
-        "jb", // jump on below
-        "jbe", // jump below or equal
-        "jp", // jump on parity
-        "jne", // jump on not equal
-        "jnl", // jump on not less
-        "jnle", // jump on not less or equal
-        "jnb", // jump on not below
-        "jnbe", // jump on not below or equal
-        "jnp", // jump on not par
-    };
-    /*
-    const char* JumpInstNameValuesAlt[] =
-    {
-        "jz", // jump on zero
-        "jnge", // jump on not greater or equal
-        "jng", // jump on not greater
-        "jnae", // jump on not above or equal
-        "jna", // jump on not above
-        "jpe", // jump on parity even
-        "jnz", // jump on not zero
-        "jge", // jump on greater or equal
-        "jg", // jump on greater
-        "jae", // jump on above or equal
-        "ja", // jump on above
-        "jpo", // jump on par odd
-    };
-    */
+        { "je", "jz" }, // Jump on equal/zero
+        { "jl", "jnge" }, // Jump on less/not greater or equal
+        { "jle", "jng" }, // Jump on less or equal/not greater
+        { "jb", "jnae" }, // Jump on below/not above or equal
+        { "jbe", "jna" }, // Jump on below or equal/not above
+        { "jp", "jpe" }, // Jump on parity/parity even
+        { "jne", "jnz" }, // Jump on not equal/not zero
+        { "jnl", "jge" }, // Jump on not less/greater or equal
+        { "jnle", "jg" }, // Jump on not less or equal/greater
+        { "jnb", "jae" }, // Jump on not below/above or equal
+        { "jnbe", "ja" }, // Jump on not below or equal/above
+        { "jnp", "jpo" }, // Jump on not par/par odd
+    }
     static_assert(ARRAY_SIZE(JumpInstValuesCommon) == ARRAY_SIZE(JumpInstNameValuesCommon), "Should be equal!");
     static_assert(ARRAY_SIZE(JumpInstValues) == ARRAY_SIZE(JumpInstNameValues), "Should be equal!");
     for (int CommonIdx = 0; CommonIdx < ARRAY_SIZE(JumpInstValuesCommon); CommonIdx++)
@@ -347,7 +330,7 @@ int ParseAndWriteInstNameAndType(byte* NextInst, char* OutInst, InstCaseType* Ou
         {
             *OutCaseType = Rel_Jmp;
             *OutOpType = Op_Jmp;
-            return WriteStringToBuffer(OutInst, JumpInstNameValues[JumpValueIdx]);
+            return WriteStringToBuffer(OutInst, JumpInstNameValues[JumpValueIdx][0]);
         }
     }
 
