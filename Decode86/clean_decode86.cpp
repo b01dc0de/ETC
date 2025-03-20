@@ -18,22 +18,33 @@ enum RegisterType : u8
     Reg_Count
 };
 
-RegisterType GetReg(u8 Val)
-{
-    RegisterType Result = Reg_Invalid;
-    if (0 <= Val && Val < 7)
-    {
-        Result = (RegisterType)(Val + 1);
-    }
-    return Result;
-}
-
 struct RegisterDesc
 {
     RegisterType Type;
     bool bWide;
     bool bHigh;
 };
+
+RegisterDesc GetRegDesc(u8 Val, bool bWide)
+{
+    constexpr RegisterDesc RegDescTable[][2] = {
+        { { Reg_a, false, false }, { Reg_a, true, false } },
+        { { Reg_c, false, false }, { Reg_c, true, false } },
+        { { Reg_d, false, false }, { Reg_d, true, false } },
+        { { Reg_b, false, false }, { Reg_b, true, false } },
+
+        { { Reg_a, false, true }, { Reg_sp, true, false } },
+        { { Reg_c, false, true }, { Reg_bp, true, false } },
+        { { Reg_d, false, true }, { Reg_si, true, false } },
+        { { Reg_b, false, true }, { Reg_di, true, false } },
+    };
+    RegisterDesc Result = {Reg_Invalid, false, false};
+    if (0 <= Val && Val <= 7) // Val must be in [0, 7]
+    {
+        return RegDescTable[Val][bWide ? 1 : 0];
+    }
+    return Result;
+}
 
 enum EffAddrType : u8
 {
@@ -474,14 +485,12 @@ OperandDesc GetOperandDesc(DecodeStateT* pDecodeState, bool bSrc)
             if (pDecodeState->bFlagDirection == bSrc)
             {
                 ASSERT(pDecodeState->bRM);
-                Result.Reg.Type = GetReg(pDecodeState->RMValue);
-                Result.Reg.bHigh = !pDecodeState->bFlagWide && pDecodeState->RMValue >= bHighMin;
+                Result.Reg = GetRegDesc(pDecodeState->RMValue, pDecodeState->bFlagWide);
             }
             else
             {
                 ASSERT(pDecodeState->bReg);
-                Result.Reg.Type = GetReg(pDecodeState->RegValue);
-                Result.Reg.bHigh = !pDecodeState->bFlagWide && pDecodeState->RegValue >= bHighMin;
+                Result.Reg = GetRegDesc(pDecodeState->RegValue, pDecodeState->bFlagWide);
             }
         } break;
         case Operand_EffAddr:
@@ -813,11 +822,11 @@ int main(int ArgCount, const char* ArgValues[])
     }
 #else
     {
-        CleanDecode86("input/listing_0037_single_register_mov");
-        CleanDecode86("input/listing_0038_many_register_mov");
+        //CleanDecode86("input/listing_0037_single_register_mov");
+        //CleanDecode86("input/listing_0038_many_register_mov");
         CleanDecode86("input/listing_0039_more_movs");
-        CleanDecode86("input/listing_0040_challenge_movs");
-        CleanDecode86("input/listing_0041_add_sub_cmp_jnz");
+        //CleanDecode86("input/listing_0040_challenge_movs");
+        //CleanDecode86("input/listing_0041_add_sub_cmp_jnz");
     }
 #endif
 }
