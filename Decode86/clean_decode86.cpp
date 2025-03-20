@@ -96,6 +96,102 @@ struct OperandDesc
     };
 };
 
+const char* OpCodeMnemonicTable[] = 
+{
+    "INVALID",
+    "mov",
+    "push",
+    "pop",
+    "xchg",
+    "in",
+    "out",
+    "xlat",
+    "lea",
+    "lds",
+    "les",
+    "lahf",
+    "sahf",
+    "pushf",
+    "popf",
+    "add",
+    "adc",
+    "inc",
+    "aaa",
+    "daa",
+    "sub",
+    "sbb",
+    "dec",
+    "neg",
+    "cmp",
+    "aas",
+    "das",
+    "mul",
+    "imul",
+    "aam",
+    "div",
+    "idiv",
+    "aad",
+    "cbw",
+    "cwd",
+    "not",
+    "shlsal",
+    "shr",
+    "sar",
+    "rol",
+    "ror",
+    "rcl",
+    "rcr",
+    "and",
+    "test",
+    "or",
+    "xor",
+    "rep",
+    "movs",
+    "cmps",
+    "scas",
+    "lods",
+    "stds",
+    "call",
+    "jmp",
+    "ret",
+    "jejz",
+    "jljnge",
+    "jlejng",
+    "jbjnae",
+    "jbejna",
+    "jbjpe",
+    "jo",
+    "js",
+    "jnejnz",
+    "jnljge",
+    "jnlejg",
+    "jnbjae",
+    "jnbeja",
+    "jnpjpo",
+    "jno",
+    "jns",
+    "loop",
+    "loopzloope",
+    "loopnzloopne",
+    "jcxz",
+    "int",
+    "into",
+    "iret",
+    "clc",
+    "cmc",
+    "stc",
+    "cld",
+    "std",
+    "cli",
+    "sti",
+    "hlt",
+    "wait",
+    "esc",
+    "lock",
+    "segment",
+    "COUNT"
+};
+
 enum OpCodeType : u8
 {
     OpCode_Invalid,
@@ -391,7 +487,7 @@ OperandDesc GetOperandDesc(DecodeStateT* pDecodeState, bool bSrc)
         case Operand_EffAddr:
         case Operand_EffAddrDisp:
         {
-            if (pDecodeState->bFlagDirection == bSrc)
+            if (pDecodeState->bFlagDirection == bSrc || !pDecodeState->bReg)
             {
                 ASSERT(pDecodeState->bRM);
                 Result.EffAddr.Type = GetEffAddr(pDecodeState->RMValue);
@@ -571,26 +667,111 @@ DecodedInst DecodeInst(InstructionFormatDesc InstDesc, u8* Inst)
         }
         else
         {
-            if (DecodeState.bFlagDirection)
-            {
-                Result.Operands[1] = GetOperandDesc(&DecodeState, 0);
-                Result.Operands[0] = GetOperandDesc(&DecodeState, 1);
-            }
-            else
-            {
-                Result.Operands[0] = GetOperandDesc(&DecodeState, 0);
-                Result.Operands[1] = GetOperandDesc(&DecodeState, 1);
-            }
+            Result.Operands[0] = GetOperandDesc(&DecodeState, 0);
+            Result.Operands[1] = GetOperandDesc(&DecodeState, 1);
         }
     }
 
     return Result;
 }
 
+void PrintInst(DecodedInst* pInst)
+{
+    constexpr int BufferSize = 64;
+    char InstBuffer[BufferSize];
+
+    const char* RegisterNames[][3] = {
+        { "*l-", "*h-", "*x-" },
+        { "al", "ah", "ax" },
+        { "cl", "ch", "cx" },
+        { "dl", "dh", "dx" },
+        { "bl", "bh", "bx" },
+        { "sp", "sp", "sp" },
+        { "bp", "bp", "bp" },
+        { "si", "si", "si" },
+        { "di", "di", "di" },
+        { "*l+", "*h+", "*x+" },
+    };
+    const char* EffAddrTable[][2] =
+    {
+        { "[**-]", "[**-%d]" },
+        { "[bx + si]", "[bx + si + %d]" },
+        { "[bx + di]", "[bx + di + %d]" },
+        { "[bp + si]", "[bp + si + %d]" },
+        { "[bp + di]", "[bp + di + %d]" },
+        { "[si]", "[si + %d]" },
+        { "[di]", "[di + %d]" },
+        { "[bp]", "[bp + %d]" },
+        { "[bx]", "[bx + %d]" },
+        { "[**+]",  "[**+%d]" },
+    };
+
+    int WriteIdx = sprintf_s(InstBuffer, "%s ", OpCodeMnemonicTable[pInst->Op]);
+    for (int OpIdx = 0; OpIdx < 2; OpIdx++)
+    {
+        switch (pInst->Operands[OpIdx].Type)
+        {
+            case Operand_Reg:
+            {
+                RegisterType Reg = pInst->Operands[OpIdx].Reg.Type;
+                int InnerIdx = 0;
+                if (pInst->Operands[OpIdx].Reg.bWide) { InnerIdx = 2; }
+                else if (pInst->Operands[OpIdx].Reg.bHigh) { InnerIdx = 1; }
+                WriteIdx += sprintf_s(InstBuffer + WriteIdx, BufferSize - WriteIdx, "%s", RegisterNames[Reg][InnerIdx]);
+            } break;
+            case Operand_EffAddr:
+            {
+                EffAddrType EffAddr = pInst->Operands[OpIdx].EffAddr.Type;
+                WriteIdx += sprintf_s(
+                    InstBuffer + WriteIdx,
+                    BufferSize - WriteIdx,
+                    EffAddrTable[EffAddr][0],
+                    pInst->Operands[OpIdx].EffAddr.Disp.bWide ?
+                    pInst->Operands[OpIdx].EffAddr.Disp.Data16 :
+                    pInst->Operands[OpIdx].EffAddr.Disp.Data8
+                );
+            } break;
+            case Operand_EffAddrDisp:
+            {
+                EffAddrType EffAddr = pInst->Operands[OpIdx].EffAddr.Type;
+                WriteIdx += sprintf_s(
+                    InstBuffer + WriteIdx,
+                    BufferSize - WriteIdx,
+                    EffAddrTable[EffAddr][1],
+                    pInst->Operands[OpIdx].EffAddr.Disp.bWide ?
+                    pInst->Operands[OpIdx].EffAddr.Disp.Data16 :
+                    pInst->Operands[OpIdx].EffAddr.Disp.Data8
+                );
+            } break;
+            case Operand_Imm:
+            {
+                WriteIdx += sprintf_s(
+                    InstBuffer + WriteIdx,
+                    BufferSize - WriteIdx,
+                    "[%d]",
+                    pInst->Operands[OpIdx].Imm.bWide ?
+                    pInst->Operands[OpIdx].Imm.Data16 :
+                    pInst->Operands[OpIdx].Imm.Data8
+                );
+            } break;
+            case Operand_Invalid: case OperandType_Count: default: { DebugBreak(); } break;
+        }
+
+        if (OpIdx == 0)
+        {
+            WriteIdx += sprintf_s(InstBuffer + WriteIdx, BufferSize - WriteIdx, ", ");
+        }
+    }
+
+    printf("%s\n", InstBuffer);
+}
+
 void CleanDecode86(const char* FileName)
 {
     FileContentsT Asm86 = ReadFileContents(FileName);
     if (nullptr == Asm86.Contents) { return; }
+
+    printf("; %s:\n", FileName);
 
     int InstCount = 0;
     DecodedInst InstStream[1000];
@@ -606,19 +787,20 @@ void CleanDecode86(const char* FileName)
         InstructionFormatDesc InstFmt = FetchInstFmtDesc(Inst0, Inst1);
         if (InstFmt.OpType != OpCode_Invalid)
         {
-            printf("[Found]: %d\n", InstFmt.EncodeValue);
             DecodedInst OutInst = DecodeInst(InstFmt, Asm86.Contents + InstReadIdx);
+            PrintInst(&OutInst);
             InstStream[InstCount++] = OutInst;
             InstReadIdx += OutInst.ByteWidth;
         }
         else
         {
-            printf("[Invalid]\n");
+            printf("[Invalid!]\n");
             DebugBreak();
         }
 
         InstReadIdx += InstByteCount;
     }
+    printf("\n");
 }
 
 int main(int ArgCount, const char* ArgValues[])
@@ -632,10 +814,10 @@ int main(int ArgCount, const char* ArgValues[])
 #else
     {
         CleanDecode86("input/listing_0037_single_register_mov");
-        //CleanDecode86("input/listing_0038_many_register_movs");
-        //CleanDecode86("input/listing_0039_more_movs");
-        //CleanDecode86("input/listing_0040_challenge_movs");
-        //CleanDecode86("input/listing_0041_add_sub_cmp_jnz");
+        CleanDecode86("input/listing_0038_many_register_mov");
+        CleanDecode86("input/listing_0039_more_movs");
+        CleanDecode86("input/listing_0040_challenge_movs");
+        CleanDecode86("input/listing_0041_add_sub_cmp_jnz");
     }
 #endif
 }
