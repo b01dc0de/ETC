@@ -2,6 +2,7 @@
 #define VIRTUAL86_PRINT_H
 
 #include "virtual86_common.h"
+#include "virtual86_sim.h"
 
 static const char* OpCodeMnemonicTable[] = 
 {

@@ -32,16 +32,10 @@ int main(int ArgCount, const char* ArgValues[])
     }
     else
     {
-        /*
-        DecodeFile86("input/listing_0037_single_register_mov");
-        DecodeFile86("input/listing_0038_many_register_mov");
-        DecodeFile86("input/listing_0039_more_movs");
-        DecodeFile86("input/listing_0040_challenge_movs");
-        DecodeFile86("input/listing_0041_add_sub_cmp_jnz");
-        */
-
-        DecodeAndSim("input/listing_0043_immediate_movs", true);
-        DecodeAndSim("input/listing_0044_register_movs", true);
+        //DecodeAndSim("input/listing_0043_immediate_movs", true);
+        //DecodeAndSim("input/listing_0044_register_movs", true);
+        //DecodeAndSim("input/listing_0045_challenge_register_movs", true);
+        DecodeAndSim("input/listing_0046_add_sub_cmp", true);
     }
 
     return 0;

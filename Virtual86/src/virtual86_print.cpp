@@ -117,17 +117,29 @@ void PrintState(Sim86State* pSimState)
     ASSERT(pSimState);
     if (pSimState)
     {
+        u16 ax = pSimState->Registers[Reg_a-1];
+        u16 bx = pSimState->Registers[Reg_b-1];
+        u16 cx = pSimState->Registers[Reg_c-1];
+        u16 dx = pSimState->Registers[Reg_d-1];
+        u16 sp = pSimState->Registers[Reg_sp-1];
+        u16 bp = pSimState->Registers[Reg_bp-1];
+        u16 si = pSimState->Registers[Reg_si-1];
+        u16 di = pSimState->Registers[Reg_di-1];
+
         printf("RESULT:\n");
+        printf("\tax: 0x%04x  (%d)\n", ax, ax);
+        printf("\tbx: 0x%04x  (%d)\n", bx, bx);
+        printf("\tcx: 0x%04x  (%d)\n", cx, cx);
+        printf("\tdx: 0x%04x  (%d)\n", dx, dx);
 
-        printf("\tax: 0x%04x  (%d)\n", pSimState->Registers[0], pSimState->Registers[0]);
-        printf("\tcx: 0x%04x  (%d)\n", pSimState->Registers[1], pSimState->Registers[1]);
-        printf("\tdx: 0x%04x  (%d)\n", pSimState->Registers[2], pSimState->Registers[2]);
-        printf("\tbx: 0x%04x  (%d)\n", pSimState->Registers[3], pSimState->Registers[3]);
+        printf("\tsp: 0x%04x  (%d)\n", sp, sp);
+        printf("\tbp: 0x%04x  (%d)\n", bp, bp);
+        printf("\tsi: 0x%04x  (%d)\n", si, si);
+        printf("\tdi: 0x%04x  (%d)\n", di, di);
 
-        printf("\tsp: 0x%04x  (%d)\n", pSimState->Registers[4], pSimState->Registers[4]);
-        printf("\tbp: 0x%04x  (%d)\n", pSimState->Registers[5], pSimState->Registers[5]);
-        printf("\tsi: 0x%04x  (%d)\n", pSimState->Registers[6], pSimState->Registers[6]);
-        printf("\tdi: 0x%04x  (%d)\n", pSimState->Registers[7], pSimState->Registers[7]);
+        printf("\n\tFlags:\n");
+        printf("\tSign: %c\n", pSimState->bFlagSign ? '1' : '0');
+        printf("\tZero: %c\n", pSimState->bFlagZero ? '1' : '0');
     }
 }
 

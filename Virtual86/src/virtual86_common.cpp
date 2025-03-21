@@ -2,7 +2,7 @@
 
 FileContentsT ReadFileContents(const char* FileName)
 {
-    FileContentsT Result;
+    FileContentsT Result = {};
 
     FILE* FileHandle = nullptr;
     fopen_s(&FileHandle, FileName, "rb");
@@ -18,7 +18,6 @@ FileContentsT ReadFileContents(const char* FileName)
         {
             Result.Data = new u8[Result.Size];
             ASSERT(fread_s(Result.Data, Result.Size, Result.Size, 1, FileHandle) == 1);
-            //fread_s(Result.Data, Result.Size, Result.Size, 1, FileHandle);
         }
 
         fclose(FileHandle);

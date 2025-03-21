@@ -212,9 +212,4 @@ struct VirtualInstStream
     int Capacity;
 };
 
-struct Sim86State
-{
-    u16 Registers[8];
-};
-
 #endif // VIRTUAL86_COMMON_H
