@@ -17,25 +17,29 @@ int main(int ArgCount, const char* ArgValues[])
 {
     Sim86State ResultState = {};
     ResultState.InitZero();
+    bool bPrint = true;
 
     if (ArgCount > 1)
     {
         for (int ArgIdx = 1; ArgIdx < ArgCount; ArgIdx++)
         {
-            ResultState.Sim86(ArgValues[ArgIdx], true);
+            ResultState.Sim86(ArgValues[ArgIdx], bPrint);
         }
     }
     else
     {
-        //ResultState.Sim86("input/listing_0043_immediate_movs", true);
-        //ResultState.Sim86("input/listing_0044_register_movs", true);
-        //ResultState.Sim86("input/listing_0045_challenge_register_movs", true);
-        //ResultState.Sim86("input/listing_0046_add_sub_cmp", true);
-        //ResultState.Sim86("input/listing_0048_ip_register", true);
-        //ResultState.Sim86("input/listing_0049_conditional_jumps", true);
+        //ResultState.Sim86("input/listing_0043_immediate_movs", bPrint);
+        //ResultState.Sim86("input/listing_0044_register_movs", bPrint);
+        //ResultState.Sim86("input/listing_0045_challenge_register_movs", bPrint);
+        //ResultState.Sim86("input/listing_0046_add_sub_cmp", bPrint);
+        //ResultState.Sim86("input/listing_0048_ip_register", bPrint);
+        //ResultState.Sim86("input/listing_0049_conditional_jumps", bPrint);
 
-        ResultState.Sim86("input/listing_0051_memory_mov", true);
-        ResultState.Sim86("input/listing_0052_memory_add_loop", true);
+        //ResultState.Sim86("input/listing_0051_memory_mov", bPrint);
+        //ResultState.Sim86("input/listing_0052_memory_add_loop", bPrint);
+
+        ResultState.Sim86Dump("input/listing_0054_draw_rectangle", "output_listing_0054_draw_rectangle.data");
+        //ResultState.Sim86Dump("input/listing_0055_challenge_rectangle", "output_listing_0055_challenge_rectangle.data");
     }
 
     return 0;

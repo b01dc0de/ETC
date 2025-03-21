@@ -25,3 +25,44 @@ FileContentsT ReadFileContents(const char* FileName)
 
     return Result;
 }
+
+bool WriteFileContents(const char* FileName, FileContentsT& FileContents)
+{
+    FILE* FileHandle = nullptr;
+    fopen_s(&FileHandle, FileName, "wb");
+
+    if (FileHandle)
+    {
+        ASSERT(FileContents.Data && FileContents.Size);
+        ASSERT(fwrite(FileContents.Data, 1, FileContents.Size, FileHandle) == FileContents.Size);
+        fclose(FileHandle);
+    }
+
+    return FileHandle != nullptr;
+}
+
+size_t ReadFileDirect(const char* FileName, u8* Dst, size_t BufferSize)
+{
+    size_t BytesWritten = 0;
+    FILE* FileHandle = nullptr;
+    fopen_s(&FileHandle, FileName, "rb");
+
+    if (FileHandle)
+    {
+        size_t FileSize = 0;
+        
+        fseek(FileHandle, 0, SEEK_END);
+        FileSize = ftell(FileHandle);
+        fseek(FileHandle, 0, SEEK_SET);
+
+        if (FileSize > 0)
+        {
+            BytesWritten = fread_s(Dst, BufferSize, 1, FileSize, FileHandle);
+        }
+
+        fclose(FileHandle);
+    }
+
+    return BytesWritten;
+
+}

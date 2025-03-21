@@ -238,8 +238,21 @@ void Sim86State::Sim86(const char* FileName, bool bPrint)
 
     delete[] FileContents.Data;
 
-    constexpr bool bAlwaysClearAfterSim = true;
+    constexpr bool bAlwaysClearAfterSim = false;
     if (bAlwaysClearAfterSim) { InitZero(); }
+}
+
+void Sim86State::Sim86Dump(const char* FileName, const char* OutputFileName)
+{
+    InitZero();
+
+    size_t InstStreamSize = 0;
+    InstStreamSize = ReadFileDirect(FileName, &Memory[0], MemSpaceSize);
+
+    while (Step(&Memory[0], InstStreamSize, false)) {}
+
+    FileContentsT OutputFileContents = { nullptr, &Memory[0], MemSpaceSize };
+    ASSERT(WriteFileContents(OutputFileName, OutputFileContents));
 }
 
 // NOTE: Commenting this version out because it can't simulate the instruction pointer properly

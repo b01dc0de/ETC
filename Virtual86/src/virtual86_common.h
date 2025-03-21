@@ -27,6 +27,8 @@ struct FileContentsT
 };
 
 FileContentsT ReadFileContents(const char* FileName);
+bool WriteFileContents(const char* FileName, FileContentsT& FileContents);
+size_t ReadFileDirect(const char* FileName, u8* Dst, size_t BufferSize);
 
 enum RegisterType
 {

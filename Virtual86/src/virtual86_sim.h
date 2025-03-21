@@ -28,6 +28,7 @@ struct Sim86State
     void SimInst(VirtualInst* pInst);
     bool Step(u8* InstStream, int Size, bool bPrint = true);
     void Sim86(const char* FileName, bool bPrint);
+    void Sim86Dump(const char* FileName, const char* OutputFileName);
 };
 
 
