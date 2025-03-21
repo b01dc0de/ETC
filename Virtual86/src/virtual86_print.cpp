@@ -114,6 +114,7 @@ void PrintInstStream(VirtualInstStream* pInstStream)
 
 void PrintState(Sim86State* pSimState)
 {
+    constexpr bool bIgnoreZero = true;
     ASSERT(pSimState);
     if (pSimState)
     {
@@ -125,21 +126,18 @@ void PrintState(Sim86State* pSimState)
         u16 bp = pSimState->Registers[Reg_bp-1];
         u16 si = pSimState->Registers[Reg_si-1];
         u16 di = pSimState->Registers[Reg_di-1];
-        
         u16 ip = pSimState->IP;
 
-        printf("RESULT:\n");
-        printf("\tax: 0x%04x  (%d)\n", ax, ax);
-        printf("\tbx: 0x%04x  (%d)\n", bx, bx);
-        printf("\tcx: 0x%04x  (%d)\n", cx, cx);
-        printf("\tdx: 0x%04x  (%d)\n", dx, dx);
-
-        printf("\tsp: 0x%04x  (%d)\n", sp, sp);
-        printf("\tbp: 0x%04x  (%d)\n", bp, bp);
-        printf("\tsi: 0x%04x  (%d)\n", si, si);
-        printf("\tdi: 0x%04x  (%d)\n", di, di);
-
-        printf("\n\tIP: 0x%04x  (%d)\n", ip, ip);
+        printf("\nSTATE:\n");
+        if (ax || !bIgnoreZero) { printf("\tax: 0x%04x  (%d)\n", ax, ax); }
+        if (bx || !bIgnoreZero) { printf("\tbx: 0x%04x  (%d)\n", bx, bx); }
+        if (cx || !bIgnoreZero) { printf("\tcx: 0x%04x  (%d)\n", cx, cx); }
+        if (dx || !bIgnoreZero) { printf("\tdx: 0x%04x  (%d)\n", dx, dx); }
+        if (sp || !bIgnoreZero) { printf("\tsp: 0x%04x  (%d)\n", sp, sp); }
+        if (bp || !bIgnoreZero) { printf("\tbp: 0x%04x  (%d)\n", bp, bp); }
+        if (si || !bIgnoreZero) { printf("\tsi: 0x%04x  (%d)\n", si, si); }
+        if (di || !bIgnoreZero) { printf("\tdi: 0x%04x  (%d)\n", di, di); }
+        printf("\tip: 0x%04x  (%d)\n", ip, ip);
 
         printf("\n\tFlags:\n");
         printf("\tSign: %c\n", pSimState->bFlagSign ? '1' : '0');

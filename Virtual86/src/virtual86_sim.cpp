@@ -2,10 +2,47 @@
 #include "virtual86_print.h"
 #include "virtual86_decode.h"
 
-DataUnit GetOpUnit(Sim86State* pState, Operand* Op)
+DataUnit Sim86State::CalcEffAddr(EffAddrDesc* pAddrDesc)
+{
+    ASSERT(pAddrDesc && pAddrDesc->Type != EffAddr_Invalid);
+    DataUnit Result = { 0, true };
+    u16 MemIdx = 0;
+    // TODO: Should we handle some 'implicit' state for op width?
+    if (pAddrDesc->bDisp)
+    {
+        if (pAddrDesc->Disp.bWide) { MemIdx = pAddrDesc->Disp.Data16; }
+        else { MemIdx = pAddrDesc->Disp.Data8; }
+    }
+    switch (pAddrDesc->Type)
+    {
+        case EffAddr_Invalid: { DebugBreak(); } break;
+        case EffAddr_bx_si:
+        { MemIdx += Registers[Reg_b-1] + Registers[Reg_si-1]; } break;
+        case EffAddr_bx_di:
+        { MemIdx += Registers[Reg_b-1] + Registers[Reg_di-1]; } break;
+        case EffAddr_bp_si:
+        { MemIdx += Registers[Reg_bp-1] + Registers[Reg_si-1]; } break;
+        case EffAddr_bp_di:
+        { MemIdx += Registers[Reg_bp-1] + Registers[Reg_di-1]; } break;
+        case EffAddr_si:
+        { MemIdx += Registers[Reg_si-1]; } break;
+        case EffAddr_di:
+        { MemIdx += Registers[Reg_di-1]; } break;
+        case EffAddr_bp:
+        { MemIdx += Registers[Reg_bp-1]; } break;
+        case EffAddr_bx:
+        { MemIdx += Registers[Reg_b - 1]; } break;
+        case EffAddr_Direct: { } break;
+    }
+
+    Result.Ptr = &Memory[MemIdx];
+
+    return Result;
+}
+
+DataUnit Sim86State::GetDataUnit(Operand* Op)
 {
     ASSERT(Op);
-    ASSERT(pState);
 
     DataUnit Result = {};
     switch (Op->Type)
@@ -14,7 +51,7 @@ DataUnit GetOpUnit(Sim86State* pState, Operand* Op)
         {
             ASSERT(!(Op->RegDesc.bWide && Op->RegDesc.bHigh));
             ASSERT(Op->RegDesc.Type != Reg_Invalid);
-            Result.Ptr = (u8*)&pState->Registers[Op->RegDesc.Type-1];
+            Result.Ptr = (u8*)&Registers[Op->RegDesc.Type-1];
             Result.bWide = Op->RegDesc.bWide;
             if (Op->RegDesc.bHigh) { Result.Ptr++; }
         } break;
@@ -24,18 +61,21 @@ DataUnit GetOpUnit(Sim86State* pState, Operand* Op)
             Result.bWide = Op->ImmDesc.bWide;
         } break;
         case OperandType_EffAddr:
+        {
+            Result = CalcEffAddr(&Op->AddrDesc);
+        } break;
         case OperandType_RelOffset:
         case OperandType_Invalid:
         default:
         {
-            // We shouldn't be here (yet)
+            // We shouldn't be here (yet) (ever(?))
             ASSERT(false);
         } break;
     }
     return Result;
 }
 
-void Sim86State::Clear()
+void Sim86State::InitZero()
 {
     for (int RegIdx = 0; RegIdx < ARRAY_SIZE(Registers); RegIdx++)
     {
@@ -44,6 +84,9 @@ void Sim86State::Clear()
     IP = 0;
     bFlagZero = false;
     bFlagSign = false;
+
+    if (!Memory) { Memory = new u8[MemSpaceSize]; }
+    memset(Memory, 0, MemSpaceSize);
 }
 void Sim86State::SetFlags8(u8 Result)
 {
@@ -63,8 +106,8 @@ void Sim86State::SetFlags(DataUnit Dst)
 
 void Sim_OpMov(Sim86State* pState, VirtualInst* pInst)
 {
-    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    DataUnit Dst = pState->GetDataUnit(&pInst->Ops[0]);
+    DataUnit Src = pState->GetDataUnit(&pInst->Ops[1]);
     ASSERT(Dst.bWide >= Src.bWide);
     if (Dst.bWide)
     {
@@ -75,8 +118,8 @@ void Sim_OpMov(Sim86State* pState, VirtualInst* pInst)
 }
 void Sim_OpAdd(Sim86State* pState, VirtualInst* pInst)
 {
-    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    DataUnit Dst = pState->GetDataUnit(&pInst->Ops[0]);
+    DataUnit Src = pState->GetDataUnit(&pInst->Ops[1]);
     ASSERT(Dst.bWide >= Src.bWide);
     if (Dst.bWide)
     {
@@ -88,8 +131,8 @@ void Sim_OpAdd(Sim86State* pState, VirtualInst* pInst)
 }
 void Sim_OpSub(Sim86State* pState, VirtualInst* pInst)
 {
-    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    DataUnit Dst = pState->GetDataUnit(&pInst->Ops[0]);
+    DataUnit Src = pState->GetDataUnit(&pInst->Ops[1]);
     ASSERT(Dst.bWide >= Src.bWide);
     if (Dst.bWide)
     {
@@ -100,8 +143,8 @@ void Sim_OpSub(Sim86State* pState, VirtualInst* pInst)
 }
 void Sim_OpCmp(Sim86State* pState, VirtualInst* pInst)
 {
-    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    DataUnit Dst = pState->GetDataUnit(&pInst->Ops[0]);
+    DataUnit Src = pState->GetDataUnit(&pInst->Ops[1]);
     ASSERT(Dst.bWide >= Src.bWide);
     if (Dst.bWide)
     {
@@ -169,10 +212,10 @@ void Sim86State::SimInst(VirtualInst* pInst)
     if (!bJmp) { IP += pInst->ByteWidth; }
 }
 
-bool Sim86State::Sim(u8* InstStream, int Size, bool bPrint)
+bool Sim86State::Step(u8* InstStream, int Size, bool bPrint)
 {
     ASSERT(IP < Size);
-    if (IP >= Size) { DebugBreak(); return true; }
+    if (IP >= Size) { DebugBreak(); return false; }
     else
     {
         VirtualInst Inst = DecodeInst(InstStream + IP);
@@ -182,25 +225,21 @@ bool Sim86State::Sim(u8* InstStream, int Size, bool bPrint)
     return IP < Size;
 }
 
-Sim86State Sim86(const char* FileName, bool bPrint)
+void Sim86State::Sim86(const char* FileName, bool bPrint)
 {
-    Sim86State Result = {}; Result.Clear();
-
     FileContentsT FileContents = ReadFileContents(FileName);
-    if (FileContents.Data == nullptr) { DebugBreak(); return Result; }
+    if (FileContents.Data == nullptr) { DebugBreak(); return; }
 
     printf("; %s:\n", FileName);
 
-    while (Result.Sim(FileContents.Data, FileContents.Size, bPrint)) { }
+    while (Step(FileContents.Data, FileContents.Size, bPrint)) { }
 
-    if (bPrint)
-    {
-        PrintState(&Result);
-    }
+    if (bPrint) { PrintState(this); }
 
     delete[] FileContents.Data;
 
-    return Result;
+    constexpr bool bAlwaysClearAfterSim = true;
+    if (bAlwaysClearAfterSim) { InitZero(); }
 }
 
 // NOTE: Commenting this version out because it can't simulate the instruction pointer properly
@@ -211,7 +250,7 @@ Sim86State Sim86(VirtualInstStream *pInstStream, bool bPrint)
     ASSERT(pInstStream && pInstStream->Data && pInstStream->Num > 0);
 
     Sim86State Result = {};
-    Result.Clear();
+    Result.InitZero();
 
     for (int InstIdx = 0; InstIdx < pInstStream->Num; InstIdx++)
     {
