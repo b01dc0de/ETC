@@ -31,6 +31,10 @@ int main(int ArgCount, const char* ArgValues[])
         DecodeFile86("input/listing_0040_challenge_movs");
         DecodeFile86("input/listing_0041_add_sub_cmp_jnz");
         */
+
+        VirtualInstStream DecodedStream = DecodeFile86("input/listing_0043_immediate_movs", true);
+        //VirtualInstStream DecodedStream = DecodeFile86("input/listing_0044_register_movs", true);
+        Sim86State ResultState = Sim86(&DecodedStream, true);
     }
 
     return 0;

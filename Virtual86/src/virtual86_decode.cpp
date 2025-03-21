@@ -174,7 +174,9 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
             int IdxReg = bDirection ? 0 : 1;
 
             Result.Ops[IdxRM] = GetOperand(Mode, RM, bWide);
-            Result.Ops[IdxReg] = GetOperand(0b11, Reg, bWide);
+            //Result.Ops[IdxReg] = GetOperand(0b11, Reg, bWide);
+            Result.Ops[IdxReg].Type = OperandType_Reg;
+            Result.Ops[IdxReg].RegDesc = GetRegisterDesc(Reg, bWide);
             if (Result.Ops[IdxRM].Type == OperandType_EffAddr && Result.Ops[IdxRM].AddrDesc.bDisp)
             {
                 if (Result.Ops[IdxRM].AddrDesc.Disp.bWide)
@@ -203,9 +205,9 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
             if (Result.Ops[0].Type == OperandType_EffAddr && Result.Ops[0].AddrDesc.bDisp)
             {
                 bDisp = true;
+                bWideDisp = Result.Ops[0].AddrDesc.Disp.bWide;
                 if (Result.Ops[0].AddrDesc.Disp.bWide)
                 {
-                    bWideDisp = true;
                     Result.Ops[0].AddrDesc.Disp.Data16 = *(u16*)(pInst + 2);
                 }
                 else
@@ -224,7 +226,7 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
             else
             {
                 Result.Ops[1].ImmDesc.bWide = false;
-                Result.Ops[1].ImmDesc.Data16 = *(u16*)(pInst + ImmDataOffset);
+                Result.Ops[1].ImmDesc.Data8 = *(pInst + ImmDataOffset);
             }
             Result.EncodedByteWidth = ImmDataOffset + (bWide ? 2 : 1);
         } break;
@@ -243,7 +245,7 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
             else
             {
                 Result.Ops[1].ImmDesc.bWide = false;
-                Result.Ops[1].ImmDesc.Data16 = *(u16*)(pInst + 1);
+                Result.Ops[1].ImmDesc.Data8 = *(pInst + 1);
             }
             Result.EncodedByteWidth = bWide ? 3 : 2;
         } break;
@@ -323,7 +325,6 @@ VirtualInstStream DecodeFile86(const char* FileName, bool bPrint)
     FileContentsT FileContents = ReadFileContents(FileName);
     if (FileContents.Data == nullptr) { DebugBreak(); return Result; }
 
-
     int InstReadIdx = 0;
     while (InstReadIdx < FileContents.Size)
     {
@@ -338,6 +339,8 @@ VirtualInstStream DecodeFile86(const char* FileName, bool bPrint)
         printf("; %s:\n", FileName);
         PrintInstStream(&Result);
     }
+
+    delete[] FileContents.Data;
 
     return Result;
 }

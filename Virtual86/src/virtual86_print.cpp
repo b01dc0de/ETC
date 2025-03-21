@@ -112,3 +112,22 @@ void PrintInstStream(VirtualInstStream* pInstStream)
     printf("\n");
 }
 
+void PrintState(Sim86State* pSimState)
+{
+    ASSERT(pSimState);
+    if (pSimState)
+    {
+        printf("RESULT:\n");
+
+        printf("\tax: 0x%04x  (%d)\n", pSimState->Registers[0], pSimState->Registers[0]);
+        printf("\tcx: 0x%04x  (%d)\n", pSimState->Registers[1], pSimState->Registers[1]);
+        printf("\tdx: 0x%04x  (%d)\n", pSimState->Registers[2], pSimState->Registers[2]);
+        printf("\tbx: 0x%04x  (%d)\n", pSimState->Registers[3], pSimState->Registers[3]);
+
+        printf("\tsp: 0x%04x  (%d)\n", pSimState->Registers[4], pSimState->Registers[4]);
+        printf("\tbp: 0x%04x  (%d)\n", pSimState->Registers[5], pSimState->Registers[5]);
+        printf("\tsi: 0x%04x  (%d)\n", pSimState->Registers[6], pSimState->Registers[6]);
+        printf("\tdi: 0x%04x  (%d)\n", pSimState->Registers[7], pSimState->Registers[7]);
+    }
+}
+

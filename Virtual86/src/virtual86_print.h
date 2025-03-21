@@ -102,5 +102,6 @@ static const char* OpCodeMnemonicTable[] =
 void PrintOperand(Operand* pOperand);
 void PrintInst(VirtualInst* Inst);
 void PrintInstStream(VirtualInstStream* pInstStream);
+void PrintState(Sim86State* pSimState);
 
 #endif // VIRTUAL86_PRINT_H
