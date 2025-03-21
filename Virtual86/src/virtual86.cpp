@@ -13,6 +13,14 @@
 #include "virtual86_sim.cpp"
 #endif // UNITY_BUILD
 
+void DecodeAndSim(const char* FileName, bool bPrint)
+{
+    VirtualInstStream DecodedStream = DecodeFile86(FileName, bPrint);
+    Sim86State ResultState = Sim86(&DecodedStream, bPrint);
+    if (bPrint) { printf("\n"); }
+    delete[] DecodedStream.Data;
+}
+
 int main(int ArgCount, const char* ArgValues[])
 {
     if (ArgCount > 1)
@@ -32,9 +40,8 @@ int main(int ArgCount, const char* ArgValues[])
         DecodeFile86("input/listing_0041_add_sub_cmp_jnz");
         */
 
-        VirtualInstStream DecodedStream = DecodeFile86("input/listing_0043_immediate_movs", true);
-        //VirtualInstStream DecodedStream = DecodeFile86("input/listing_0044_register_movs", true);
-        Sim86State ResultState = Sim86(&DecodedStream, true);
+        DecodeAndSim("input/listing_0043_immediate_movs", true);
+        DecodeAndSim("input/listing_0044_register_movs", true);
     }
 
     return 0;

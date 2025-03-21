@@ -17,7 +17,6 @@ FileContentsT ReadFileContents(const char* FileName)
         if (Result.Size > 0)
         {
             Result.Data = new u8[Result.Size];
-            printf("FileSize: %d\n", Result.Size);
             ASSERT(fread_s(Result.Data, Result.Size, Result.Size, 1, FileHandle) == 1);
             //fread_s(Result.Data, Result.Size, Result.Size, 1, FileHandle);
         }
