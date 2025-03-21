@@ -96,7 +96,7 @@ enum OpCodeType : u8
     OpCode_JleJng,
     OpCode_JbJnae,
     OpCode_JbeJna,
-    OpCode_JbJpe,
+    OpCode_JpJpe,
     OpCode_Jo,
     OpCode_Js,
     OpCode_JneJnz,
@@ -168,7 +168,7 @@ static const char* OpCodeMnemonicTable[] =
     "cbw",
     "cwd",
     "not",
-    "shlsal",
+    "shl", // "sal"
     "shr",
     "sar",
     "rol",
@@ -188,25 +188,25 @@ static const char* OpCodeMnemonicTable[] =
     "call",
     "jmp",
     "ret",
-    "jejz",
-    "jljnge",
-    "jlejng",
-    "jbjnae",
-    "jbejna",
-    "jbjpe",
+    "je", // "jz"
+    "jl", // "jnge"
+    "jle", // "jng"
+    "jb", // "jnae"
+    "jbe", // "jna"
+    "jp", // "jpe"
     "jo",
     "js",
-    "jnejnz",
-    "jnljge",
-    "jnlejg",
-    "jnbjae",
-    "jnbeja",
-    "jnpjpo",
+    "jne", // "jnz"
+    "jnl", // "jge"
+    "jnle", // "jg"
+    "jnb", // "jae"
+    "jnbe", // "ja"
+    "jnp", // "jpo"
     "jno",
     "jns",
     "loop",
-    "loopzloope",
-    "loopnzloopne",
+    "loopz", // "loope"
+    "loopnz", // "loopne"
     "jcxz",
     "int",
     "into",
