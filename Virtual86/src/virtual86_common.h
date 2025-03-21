@@ -28,6 +28,33 @@ struct FileContentsT
 
 FileContentsT ReadFileContents(const char* FileName);
 
+enum RegisterType
+{
+    Reg_Invalid,
+    Reg_a,
+    Reg_c,
+    Reg_d,
+    Reg_b,
+    Reg_sp,
+    Reg_bp,
+    Reg_si,
+    Reg_di,
+};
+
+enum EffAddrType
+{
+    EffAddr_Invalid,
+    EffAddr_bx_si,
+    EffAddr_bx_di,
+    EffAddr_bp_si,
+    EffAddr_bp_di,
+    EffAddr_si,
+    EffAddr_di,
+    EffAddr_bp,
+    EffAddr_bx,
+    EffAddr_Direct,
+};
+
 enum OpCodeType : u8
 {
     OpCode_Invalid,
@@ -130,100 +157,59 @@ enum OpCodeType : u8
     OpCode_Count
 };
 
-static const char* OpCodeMnemonicTable[] = 
+struct DataDesc
 {
-    "----",
-    "mov",
-    "push",
-    "pop",
-    "xchg",
-    "in",
-    "out",
-    "xlat",
-    "lea",
-    "lds",
-    "les",
-    "lahf",
-    "sahf",
-    "pushf",
-    "popf",
-    "add",
-    "adc",
-    "inc",
-    "aaa",
-    "daa",
-    "sub",
-    "sbb",
-    "dec",
-    "neg",
-    "cmp",
-    "aas",
-    "das",
-    "mul",
-    "imul",
-    "aam",
-    "div",
-    "idiv",
-    "aad",
-    "cbw",
-    "cwd",
-    "not",
-    "shl", // "sal"
-    "shr",
-    "sar",
-    "rol",
-    "ror",
-    "rcl",
-    "rcr",
-    "and",
-    "test",
-    "or",
-    "xor",
-    "rep",
-    "movs",
-    "cmps",
-    "scas",
-    "lods",
-    "stds",
-    "call",
-    "jmp",
-    "ret",
-    "je", // "jz"
-    "jl", // "jnge"
-    "jle", // "jng"
-    "jb", // "jnae"
-    "jbe", // "jna"
-    "jp", // "jpe"
-    "jo",
-    "js",
-    "jne", // "jnz"
-    "jnl", // "jge"
-    "jnle", // "jg"
-    "jnb", // "jae"
-    "jnbe", // "ja"
-    "jnp", // "jpo"
-    "jno",
-    "jns",
-    "loop",
-    "loopz", // "loope"
-    "loopnz", // "loopne"
-    "jcxz",
-    "int",
-    "into",
-    "iret",
-    "clc",
-    "cmc",
-    "stc",
-    "cld",
-    "std",
-    "cli",
-    "sti",
-    "hlt",
-    "wait",
-    "esc",
-    "lock",
-    "segment",
-    "++++"
+    bool bWide;
+    union { u8 Data8; u16 Data16; };
+};
+
+struct RegisterDesc
+{
+    RegisterType Type;
+    bool bWide;
+    bool bHigh;
+};
+
+struct EffAddrDesc
+{
+    EffAddrType Type;
+    bool bDisp;
+    DataDesc Disp;
+};
+
+enum OperandType
+{
+    OperandType_Invalid,
+    OperandType_Reg,
+    OperandType_EffAddr,
+    OperandType_Imm,
+    OperandType_RelOffset
+};
+
+struct Operand
+{
+    OperandType Type;
+    union
+    {
+        RegisterDesc RegDesc;
+        EffAddrDesc AddrDesc;
+        DataDesc ImmDesc;
+    };
+};
+
+struct VirtualInst
+{
+    OpCodeType Code;
+    Operand Ops[2];
+    int EncodedByteWidth;
+};
+
+// TODO: Make this dynamic
+struct VirtualInstStream
+{
+    VirtualInst* Data;
+    int Num;
+    int Capacity;
 };
 
 #endif // VIRTUAL86_COMMON_H
