@@ -201,7 +201,7 @@ struct VirtualInst
 {
     OpCodeType Code;
     Operand Ops[2];
-    int EncodedByteWidth;
+    int ByteWidth;
 };
 
 // TODO: Make this dynamic

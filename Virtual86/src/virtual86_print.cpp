@@ -125,6 +125,8 @@ void PrintState(Sim86State* pSimState)
         u16 bp = pSimState->Registers[Reg_bp-1];
         u16 si = pSimState->Registers[Reg_si-1];
         u16 di = pSimState->Registers[Reg_di-1];
+        
+        u16 ip = pSimState->IP;
 
         printf("RESULT:\n");
         printf("\tax: 0x%04x  (%d)\n", ax, ax);
@@ -136,6 +138,8 @@ void PrintState(Sim86State* pSimState)
         printf("\tbp: 0x%04x  (%d)\n", bp, bp);
         printf("\tsi: 0x%04x  (%d)\n", si, si);
         printf("\tdi: 0x%04x  (%d)\n", di, di);
+
+        printf("\n\tIP: 0x%04x  (%d)\n", ip, ip);
 
         printf("\n\tFlags:\n");
         printf("\tSign: %c\n", pSimState->bFlagSign ? '1' : '0');

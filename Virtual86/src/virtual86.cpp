@@ -13,29 +13,25 @@
 #include "virtual86_sim.cpp"
 #endif // UNITY_BUILD
 
-void DecodeAndSim(const char* FileName, bool bPrint)
-{
-    VirtualInstStream DecodedStream = DecodeFile86(FileName, bPrint);
-    Sim86State ResultState = Sim86(&DecodedStream, bPrint);
-    if (bPrint) { printf("\n"); }
-    delete[] DecodedStream.Data;
-}
-
 int main(int ArgCount, const char* ArgValues[])
 {
     if (ArgCount > 1)
     {
+        Sim86State Result = {}; Result.Clear();
         for (int ArgIdx = 1; ArgIdx < ArgCount; ArgIdx++)
         {
-            DecodeFile86(ArgValues[ArgIdx]);
+            Result = Sim86(ArgValues[ArgIdx], true);
         }
     }
     else
     {
-        //DecodeAndSim("input/listing_0043_immediate_movs", true);
-        //DecodeAndSim("input/listing_0044_register_movs", true);
-        //DecodeAndSim("input/listing_0045_challenge_register_movs", true);
-        DecodeAndSim("input/listing_0046_add_sub_cmp", true);
+        Sim86State Result = {};
+        //Result = Sim86("input/listing_0043_immediate_movs", true);
+        //Result = Sim86("input/listing_0044_register_movs", true);
+        //Result = Sim86("input/listing_0045_challenge_register_movs", true);
+        //Result = Sim86("input/listing_0046_add_sub_cmp", true);
+        Result = Sim86("input/listing_0048_ip_register", true);
+        Result = Sim86("input/listing_0049_conditional_jumps", true);
     }
 
     return 0;

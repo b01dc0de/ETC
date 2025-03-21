@@ -182,15 +182,15 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
                 if (Result.Ops[IdxRM].AddrDesc.Disp.bWide)
                 {
                     Result.Ops[IdxRM].AddrDesc.Disp.Data16 = *(u16*)(pInst + 2);
-                    Result.EncodedByteWidth = 4;
+                    Result.ByteWidth = 4;
                 }
                 else
                 {
                     Result.Ops[IdxRM].AddrDesc.Disp.Data8 = *(pInst + 2);
-                    Result.EncodedByteWidth = 3;
+                    Result.ByteWidth = 3;
                 }
             }
-            else { Result.EncodedByteWidth = 2; }
+            else { Result.ByteWidth = 2; }
         } break;
         case Args_DstRegMem_SrcImm:
         {
@@ -228,7 +228,7 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
                 Result.Ops[1].ImmDesc.bWide = false;
                 Result.Ops[1].ImmDesc.Data8 = *(pInst + ImmDataOffset);
             }
-            Result.EncodedByteWidth = ImmDataOffset + (bWide ? 2 : 1);
+            Result.ByteWidth = ImmDataOffset + (bWide ? 2 : 1);
         } break;
         case Args_DstReg_SrcImm:
         {
@@ -247,7 +247,7 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
                 Result.Ops[1].ImmDesc.bWide = false;
                 Result.Ops[1].ImmDesc.Data8 = *(pInst + 1);
             }
-            Result.EncodedByteWidth = bWide ? 3 : 2;
+            Result.ByteWidth = bWide ? 3 : 2;
         } break;
         case Args_DstAcc_SrcImm:
         case Args_DstImm_SrcAcc:
@@ -273,7 +273,7 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
                 Result.Ops[ImmIdx].ImmDesc.bWide = false;
                 Result.Ops[ImmIdx].ImmDesc.Data8 = *(pInst + 1);
             }
-            Result.EncodedByteWidth = bWide ? 3 : 2;
+            Result.ByteWidth = bWide ? 3 : 2;
         } break;
         case Args_JmpOffset:
         {
@@ -281,7 +281,7 @@ VirtualInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst)
             Result.Ops[0].ImmDesc.bWide = false;
             Result.Ops[0].ImmDesc.Data8 = *(pInst + 1) + 2; // TODO: Why does this 2 make the values correct?
             // NOTE: type of data according to manual is IP-INC8
-            Result.EncodedByteWidth = 2;
+            Result.ByteWidth = 2;
         } break;
     }
     return Result;
@@ -317,6 +317,7 @@ VirtualInst DecodeInst(u8* pInst)
     return Result;
 }
 
+/*
 VirtualInstStream DecodeFile86(const char* FileName, bool bPrint)
 {
     constexpr int DefaultCapacity = 1024;
@@ -330,7 +331,7 @@ VirtualInstStream DecodeFile86(const char* FileName, bool bPrint)
     {
         Result.Data[Result.Num] = DecodeInst(FileContents.Data + InstReadIdx);
 
-        InstReadIdx += Result.Data[Result.Num].EncodedByteWidth;
+        InstReadIdx += Result.Data[Result.Num].ByteWidth;
         Result.Num++;
     }
 
@@ -344,4 +345,5 @@ VirtualInstStream DecodeFile86(const char* FileName, bool bPrint)
 
     return Result;
 }
+*/
 

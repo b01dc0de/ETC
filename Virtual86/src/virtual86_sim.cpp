@@ -1,30 +1,13 @@
 #include "virtual86_sim.h"
 #include "virtual86_print.h"
+#include "virtual86_decode.h"
 
-Sim86State ZeroState()
-{
-    Sim86State Result = {};
-    for (int RegIdx = 0; RegIdx < ARRAY_SIZE(Result.Registers); RegIdx++)
-    {
-        Result.Registers[RegIdx] = 0;
-    }
-    Result.bFlagZero = false;
-    Result.bFlagSign = false;
-    return Result;
-}
-
-struct OpUnit
-{
-    u8* Ptr;
-    bool bWide;
-};
-
-OpUnit GetOpUnit(Sim86State* pState, Operand* Op)
+DataUnit GetOpUnit(Sim86State* pState, Operand* Op)
 {
     ASSERT(Op);
     ASSERT(pState);
 
-    OpUnit Result = {};
+    DataUnit Result = {};
     switch (Op->Type)
     {
         case OperandType_Reg:
@@ -52,90 +35,183 @@ OpUnit GetOpUnit(Sim86State* pState, Operand* Op)
     return Result;
 }
 
-void Sim_SetFlags8(Sim86State* pState, u8 Result)
+void Sim86State::Clear()
 {
-    pState->bFlagSign = Result & 0x80;
-    pState->bFlagZero = Result == 0;
+    for (int RegIdx = 0; RegIdx < ARRAY_SIZE(Registers); RegIdx++)
+    {
+        Registers[RegIdx] = 0;
+    }
+    IP = 0;
+    bFlagZero = false;
+    bFlagSign = false;
 }
-void Sim_SetFlags16(Sim86State* pState, u16 Result)
+void Sim86State::SetFlags8(u8 Result)
 {
-    pState->bFlagSign = Result & 0x8000;
-    pState->bFlagZero = Result == 0;
+    bFlagSign = Result & 0x80;
+    bFlagZero = Result == 0;
 }
-void Sim_SetFlags(Sim86State* pState, OpUnit Dst)
+void Sim86State::SetFlags16(u16 Result)
 {
-    if (Dst.bWide) { Sim_SetFlags16(pState, *(u16*)Dst.Ptr); }
-    else { Sim_SetFlags8(pState, *Dst.Ptr); }
+    bFlagSign = Result & 0x8000;
+    bFlagZero = Result == 0;
 }
+void Sim86State::SetFlags(DataUnit Dst)
+{
+    if (Dst.bWide) { SetFlags16(*(u16*)Dst.Ptr); }
+    else { SetFlags8(*Dst.Ptr); }
+}
+
 void Sim_OpMov(Sim86State* pState, VirtualInst* pInst)
 {
-    OpUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    OpUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
-    ASSERT(Dst.bWide == Src.bWide);
-    if (Dst.bWide) { *(u16*)Dst.Ptr = *(u16*)Src.Ptr; }
+    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
+    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    ASSERT(Dst.bWide >= Src.bWide);
+    if (Dst.bWide)
+    {
+        if (Src.bWide) { *(u16*)Dst.Ptr = *(u16*)Src.Ptr; }
+        else { *(u16*)Dst.Ptr = *Src.Ptr; }
+    }
     else { *Dst.Ptr = *Src.Ptr; }
 }
 void Sim_OpAdd(Sim86State* pState, VirtualInst* pInst)
 {
-    OpUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    OpUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
-    ASSERT(Dst.bWide == Src.bWide);
-    if (Dst.bWide) { *(u16*)Dst.Ptr += *(u16*)Src.Ptr; }
+    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
+    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    ASSERT(Dst.bWide >= Src.bWide);
+    if (Dst.bWide)
+    {
+        if (Src.bWide) { *(u16*)Dst.Ptr += *(u16*)Src.Ptr; }
+        else { *(u16*)Dst.Ptr += *Src.Ptr; }
+    }
     else { *Dst.Ptr += *Src.Ptr; }
-    Sim_SetFlags(pState, Dst);
+    pState->SetFlags(Dst);
 }
 void Sim_OpSub(Sim86State* pState, VirtualInst* pInst)
 {
-    OpUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    OpUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
-    ASSERT(Dst.bWide == Src.bWide);
-    if (Dst.bWide) { *(u16*)Dst.Ptr -= *(u16*)Src.Ptr; }
-    else { *Dst.Ptr -= *Src.Ptr; }
-    Sim_SetFlags(pState, Dst);
+    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
+    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    ASSERT(Dst.bWide >= Src.bWide);
+    if (Dst.bWide)
+    {
+        if (Src.bWide) { *(u16*)Dst.Ptr -= *(u16*)Src.Ptr; }
+        else { *(u16*)Dst.Ptr -= *Src.Ptr; }
+    }
+    pState->SetFlags(Dst);
 }
 void Sim_OpCmp(Sim86State* pState, VirtualInst* pInst)
 {
-    OpUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
-    OpUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
-    ASSERT(Dst.bWide == Src.bWide);
-    u16 Tmp = 0;
+    DataUnit Dst = GetOpUnit(pState, &pInst->Ops[0]);
+    DataUnit Src = GetOpUnit(pState, &pInst->Ops[1]);
+    ASSERT(Dst.bWide >= Src.bWide);
     if (Dst.bWide)
     {
-        Tmp = *(u16*)Dst.Ptr;
-        Tmp -= *(u16*)Src.Ptr;
-        Sim_SetFlags16(pState, Tmp);
+        u16 Tmp = *(u16*)Dst.Ptr;
+        if (Src.bWide) { Tmp -= *(u16*)Src.Ptr; }
+        else { Tmp -= *Src.Ptr; }
+        pState->SetFlags16(Tmp);
     }
     else
     {
-        Tmp = *Dst.Ptr;
+        u8 Tmp = *Dst.Ptr;
         Tmp -= *Src.Ptr;
-        Sim_SetFlags16(pState, Tmp);
+        pState->SetFlags8(Tmp);
     }
 }
-
-void SimInst(Sim86State* pState, VirtualInst* pInst)
+bool Sim_OpJmp(Sim86State* pState, VirtualInst* pInst)
 {
-    ASSERT(pState);
-    ASSERT(pInst);
+    ASSERT(pInst->Ops[0].Type == OperandType_RelOffset);
+
+    bool bJmp = false;
+
     switch (pInst->Code)
     {
-        case OpCode_Mov: { Sim_OpMov(pState, pInst); } break;
-        case OpCode_Add: { Sim_OpAdd(pState, pInst); } break;
-        case OpCode_Sub: { Sim_OpSub(pState, pInst); } break;
-        case OpCode_Cmp: { Sim_OpCmp(pState, pInst); } break;
+        case OpCode_JeJz: { bJmp = pState->bFlagZero; } break;
+        case OpCode_JneJnz: { bJmp = !pState->bFlagZero; } break;
+        case OpCode_Js: { bJmp = pState->bFlagSign; } break;
+        case OpCode_Jns: { bJmp = !pState->bFlagSign; } break;
+        /*
+        case OpCode_JlJnge: case OpCode_JleJng: case OpCode_JbJnae: case OpCode_JbeJna:
+        case OpCode_JpJpe: case OpCode_Jo: case OpCode_JnlJge: case OpCode_JnleJg:
+        case OpCode_JnbJae: case OpCode_JnbeJa: case OpCode_JnpJpo: case OpCode_Jno:
+        case OpCode_Loop: case OpCode_LoopzLoope: case OpCode_LoopnzLoopne: case OpCode_Jcxz:
+        */
+        default: { DebugBreak(); } break;
+    }
+
+    if (bJmp)
+    {
+        s8 Offset = pInst->Ops[0].ImmDesc.Data8;
+        pState->IP += Offset;
+    }
+    return bJmp;
+}
+
+void Sim86State::SimInst(VirtualInst* pInst)
+{
+    ASSERT(pInst);
+    bool bJmp = false;
+    switch (pInst->Code)
+    {
+        case OpCode_Mov: { Sim_OpMov(this, pInst); } break;
+        case OpCode_Add: { Sim_OpAdd(this, pInst); } break;
+        case OpCode_Sub: { Sim_OpSub(this, pInst); } break;
+        case OpCode_Cmp: { Sim_OpCmp(this, pInst); } break;
+        case OpCode_JeJz:
+        case OpCode_JneJnz:
+        case OpCode_Js:
+        case OpCode_Jns: { bJmp = Sim_OpJmp(this, pInst); } break;
         default:
         {
             // UNHANDLED INST
             DebugBreak();
         } break;
     }
+    if (!bJmp) { IP += pInst->ByteWidth; }
 }
 
+bool Sim86State::Sim(u8* InstStream, int Size, bool bPrint)
+{
+    ASSERT(IP < Size);
+    if (IP >= Size) { DebugBreak(); return true; }
+    else
+    {
+        VirtualInst Inst = DecodeInst(InstStream + IP);
+        if (bPrint) { PrintInst(&Inst); }
+        SimInst(&Inst);
+    }
+    return IP < Size;
+}
+
+Sim86State Sim86(const char* FileName, bool bPrint)
+{
+    Sim86State Result = {}; Result.Clear();
+
+    FileContentsT FileContents = ReadFileContents(FileName);
+    if (FileContents.Data == nullptr) { DebugBreak(); return Result; }
+
+    printf("; %s:\n", FileName);
+
+    while (Result.Sim(FileContents.Data, FileContents.Size, bPrint)) { }
+
+    if (bPrint)
+    {
+        PrintState(&Result);
+    }
+
+    delete[] FileContents.Data;
+
+    return Result;
+}
+
+// NOTE: Commenting this version out because it can't simulate the instruction pointer properly
+/*
+Sim86State Sim86(VirtualInstStream *pInstStream, bool bPrint = true);
 Sim86State Sim86(VirtualInstStream *pInstStream, bool bPrint)
 {
     ASSERT(pInstStream && pInstStream->Data && pInstStream->Num > 0);
 
-    Sim86State Result = ZeroState();
+    Sim86State Result = {};
+    Result.Clear();
 
     for (int InstIdx = 0; InstIdx < pInstStream->Num; InstIdx++)
     {
@@ -145,4 +221,5 @@ Sim86State Sim86(VirtualInstStream *pInstStream, bool bPrint)
     if (bPrint) { PrintState(&Result); }
     return {};
 }
+*/
 
