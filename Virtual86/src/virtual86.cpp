@@ -93,8 +93,8 @@ EffAddrDesc GetEffAddrDesc(u8 Mode, u8 Val)
         { { EffAddr_bp_di, 0 }, { EffAddr_bp_di, 1, {0} }, { EffAddr_bp_di, 1, {1} }, },
         { { EffAddr_si, 0 }, { EffAddr_si, 1, {0} }, { EffAddr_si, 1, {1} }, },
         { { EffAddr_di, 0 }, { EffAddr_di, 1, {0} }, { EffAddr_di, 1, {1} }, },
-        { { EffAddr_Direct, 1, {1} }, { EffAddr_bp, 0, {0} }, { EffAddr_bp, 1, {1} }, },
-        { { EffAddr_bx, 1, {1} }, { EffAddr_bx, 0, {0} }, { EffAddr_bx, 1, {1} }, },
+        { { EffAddr_Direct, 1, {1} }, { EffAddr_bp, 1, {0} }, { EffAddr_bp, 1, {1} }, },
+        { { EffAddr_bx, 1, {1} }, { EffAddr_bx, 1, {0} }, { EffAddr_bx, 1, {1} }, },
     };
 
     if (0 <= Val && Val <= 7 && 0 <= Mode && Mode <= 2)
@@ -223,7 +223,7 @@ ParsedInst ParseInst(InstEncodeFormat* EncodeFmt, u8* pInst, int* OutNumBytesRea
             int IdxReg = bDirection ? 0 : 1;
 
             Result.Ops[IdxRM] = GetOperand(Mode, RM, bWide);
-            Result.Ops[IdxReg] = GetOperand(Mode, Reg, bWide);
+            Result.Ops[IdxReg] = GetOperand(0b11, Reg, bWide);
             if (Result.Ops[IdxRM].Type == OperandType_EffAddr && Result.Ops[IdxRM].AddrDesc.bDisp)
             {
                 if (Result.Ops[IdxRM].AddrDesc.Disp.bWide)
@@ -333,7 +333,8 @@ ParsedInst DecodeInst(u8* pInst, int* OutNumBytesRead)
     for (int InstFmtIdx = 1; InstFmtIdx < ARRAY_SIZE(EncodeFormatTable); InstFmtIdx++)
     {
         InstEncodeFormat& CurrFmt = EncodeFormatTable[InstFmtIdx];
-        if (((*pInst) >> (8-CurrFmt.EncodeBitCount)) == CurrFmt.EncodeValue )
+        u8 ShiftedEncodeValue = (*pInst) >> (8 - CurrFmt.EncodeBitCount);
+        if (ShiftedEncodeValue == CurrFmt.EncodeValue )
         {
             if (CurrFmt.OptEncodeBitCount == 0)
             {
@@ -350,27 +351,6 @@ ParsedInst DecodeInst(u8* pInst, int* OutNumBytesRead)
     if (pMatch) { Result = ParseInst(pMatch, pInst, OutNumBytesRead); }
     else { DebugBreak(); }
     return Result;
-}
-
-const char* GetRegisterName(RegisterDesc* pReg)
-{
-    const char* RegisterNames[][2] = {
-        { "REGNAMEERROR", "REGNAMEERRORWIDE" },
-        { "al", "ax" },
-        { "cl", "cx" },
-        { "dl", "dx" },
-        { "bl", "bx" },
-        { "ah", "sp" },
-        { "ch", "bp" },
-        { "dh", "si" },
-        { "bh", "di" },
-    };
-    if (pReg)
-    {
-        // TODO: Cleanup, this _feels_ messy
-        return RegisterNames[pReg->Type + (pReg->bHigh ? 4 : 0)][pReg->bWide];
-    }
-    else { return nullptr; }
 }
 
 void PrintOperand(Operand* pOperand)
@@ -409,15 +389,22 @@ void PrintOperand(Operand* pOperand)
         case OperandType_Invalid: { DebugBreak(); } break;
         case OperandType_Reg:
         {
+            // TODO: Cleanup, this _feels_ messy
             int RegIdx = pOperand->RegDesc.Type + (pOperand->RegDesc.bHigh ? 4 : 0);
             sprintf_s(OperandBuffer, "%s", RegisterNames[RegIdx][pOperand->RegDesc.bWide]);
         } break;
         case OperandType_EffAddr:
         {
-            if (pOperand->AddrDesc.bDisp)
+            if (pOperand->AddrDesc.bDisp && pOperand->AddrDesc.Disp.bWide)
             {
-                sprintf_s(OperandBuffer, EffAddrNameFmtTable[pOperand->AddrDesc.Type][1],
-                    pOperand->AddrDesc.Disp.bWide ? pOperand->AddrDesc.Disp.Data16 : pOperand->AddrDesc.Disp.Data8);
+                short sData16 = pOperand->AddrDesc.Disp.Data16;
+                sprintf_s(OperandBuffer, EffAddrNameFmtTable[pOperand->AddrDesc.Type][1], sData16);
+
+            }
+            else if (pOperand->AddrDesc.bDisp && !pOperand->AddrDesc.Disp.bWide)
+            {
+                char sData8 = pOperand->AddrDesc.Disp.Data8;
+                sprintf_s(OperandBuffer, EffAddrNameFmtTable[pOperand->AddrDesc.Type][1], sData8);
             }
             else
             {
@@ -429,12 +416,12 @@ void PrintOperand(Operand* pOperand)
             if (pOperand->ImmDesc.bWide)
             {
                 short sData16 = pOperand->ImmDesc.Data16;
-                sprintf_s(OperandBuffer, "%d", sData16);
+                sprintf_s(OperandBuffer, "word %d", sData16);
             }
             else
             {
-                char sData8 = pOperand->ImmDesc.Data16;
-                sprintf_s(OperandBuffer, "%d", sData8);
+                char sData8 = pOperand->ImmDesc.Data8;
+                sprintf_s(OperandBuffer, "byte %d", sData8);
             }
         } break;
     }
@@ -493,7 +480,7 @@ int main(int ArgCount, const char* ArgValues[])
     //DecodeFile86("input/listing_0037_single_register_mov");
     //DecodeFile86("input/listing_0038_many_register_mov");
     DecodeFile86("input/listing_0039_more_movs");
-    //DecodeFile86("input/listing_0040_challenge_movs");
+    DecodeFile86("input/listing_0040_challenge_movs");
     //DecodeFile86("input/listing_0041_add_sub_cmp_jnz");
 
     return 0;
