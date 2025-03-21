@@ -9,9 +9,9 @@ enum RegisterType
 {
     Reg_Invalid,
     Reg_a,
-    Reg_b,
     Reg_c,
     Reg_d,
+    Reg_b,
     Reg_sp,
     Reg_bp,
     Reg_si,
@@ -409,7 +409,8 @@ void PrintOperand(Operand* pOperand)
         case OperandType_Invalid: { DebugBreak(); } break;
         case OperandType_Reg:
         {
-            sprintf_s(OperandBuffer, "%s", RegisterNames[pOperand->RegDesc.Type + (pOperand->RegDesc.bHigh ? 4 : 0)][pOperand->RegDesc.bWide]);
+            int RegIdx = pOperand->RegDesc.Type + (pOperand->RegDesc.bHigh ? 4 : 0);
+            sprintf_s(OperandBuffer, "%s", RegisterNames[RegIdx][pOperand->RegDesc.bWide]);
         } break;
         case OperandType_EffAddr:
         {
@@ -463,6 +464,8 @@ void DecodeFile86(const char* FileName)
     FileContentsT FileContents = ReadFileContents(FileName);
     if (FileContents.Data == nullptr) { DebugBreak(); return; }
 
+    printf("; %s:\n", FileName);
+
     ParsedInst InstStream[1000];
 
     int InstReadIdx = 0;
@@ -476,6 +479,7 @@ void DecodeFile86(const char* FileName)
         InstReadIdx += NumBytesRead;
         InstWriteIdx++;
     }
+    printf("\n");
 }
 
 int main(int ArgCount, const char* ArgValues[])
@@ -486,9 +490,9 @@ int main(int ArgCount, const char* ArgValues[])
         printf("\tArgValues[%d]: %s\n", ArgIdx, ArgValues[ArgIdx]);
     }
     */
-    DecodeFile86("input/listing_0037_single_register_mov");
+    //DecodeFile86("input/listing_0037_single_register_mov");
     //DecodeFile86("input/listing_0038_many_register_mov");
-    //DecodeFile86("input/listing_0039_more_movs");
+    DecodeFile86("input/listing_0039_more_movs");
     //DecodeFile86("input/listing_0040_challenge_movs");
     //DecodeFile86("input/listing_0041_add_sub_cmp_jnz");
 

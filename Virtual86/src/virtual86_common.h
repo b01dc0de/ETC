@@ -132,7 +132,7 @@ enum OpCodeType : u8
 
 static const char* OpCodeMnemonicTable[] = 
 {
-    "----"
+    "----",
     "mov",
     "push",
     "pop",
