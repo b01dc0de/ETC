@@ -249,7 +249,10 @@ void Sim86State::Sim86Dump(const char* FileName, const char* OutputFileName)
     size_t InstStreamSize = 0;
     InstStreamSize = ReadFileDirect(FileName, &Memory[0], MemSpaceSize);
 
-    while (Step(&Memory[0], InstStreamSize, false)) {}
+    do
+    {
+
+    } while (Step(&Memory[0], InstStreamSize, false));
 
     FileContentsT OutputFileContents = { nullptr, &Memory[0], MemSpaceSize };
     ASSERT(WriteFileContents(OutputFileName, OutputFileContents));

@@ -1,5 +1,6 @@
 #include "virtual86_common.h"
 #include "virtual86_decode.h"
+#include "virtual86_estperf.h"
 #include "virtual86_print.h"
 #include "virtual86_sim.h"
 
@@ -9,6 +10,7 @@
 #if UNITY_BUILD
 #include "virtual86_common.cpp"
 #include "virtual86_decode.cpp"
+#include "virtual86_estperf.cpp"
 #include "virtual86_print.cpp"
 #include "virtual86_sim.cpp"
 #endif // UNITY_BUILD
@@ -38,8 +40,10 @@ int main(int ArgCount, const char* ArgValues[])
         //ResultState.Sim86("input/listing_0051_memory_mov", bPrint);
         //ResultState.Sim86("input/listing_0052_memory_add_loop", bPrint);
 
-        ResultState.Sim86Dump("input/listing_0054_draw_rectangle", "output_listing_0054_draw_rectangle.data");
+        //ResultState.Sim86Dump("input/listing_0054_draw_rectangle", "output_listing_0054_draw_rectangle.data");
         //ResultState.Sim86Dump("input/listing_0055_challenge_rectangle", "output_listing_0055_challenge_rectangle.data");
+
+        Est86Cycles("input/listing_0056_estimating_cycles");
     }
 
     return 0;

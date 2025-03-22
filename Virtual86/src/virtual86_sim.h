@@ -31,6 +31,5 @@ struct Sim86State
     void Sim86Dump(const char* FileName, const char* OutputFileName);
 };
 
-
 #endif // VIRTUAL86_SIM_H
 
