@@ -12,27 +12,31 @@ using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
 using u64 = uint64_t;
+
 using s8 = int8_t;
 using s16 = int16_t;
 using s32 = int32_t;
 using s64 = int64_t;
 
-struct HaversinePairData
+using f32 = float;
+using f64 = double;
+
+struct CoordPair
 {
-    float X0;
-    float Y0;
-    float X1;
-    float Y1;
+    f64 X0;
+    f64 Y0;
+    f64 X1;
+    f64 Y1;
 };
 
-struct HaversinePairList
+struct CoordPairList
 {
     int Count;
-    HaversinePairData* Data;
+    CoordPair* Data;
 };
 
-using PairType = HaversinePairData;
-using ListType = HaversinePairList;
+using HPair = CoordPair;
+using HList = CoordPairList;
 
 #endif // HAVERSINE_COMMON_H
 

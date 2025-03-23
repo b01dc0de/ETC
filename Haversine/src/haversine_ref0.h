@@ -14,8 +14,13 @@
 
 namespace Haversine_Ref0
 {
-    ListType GenerateDataBinary(int PairCount, int Seed);
-    void WriteDataAsJSON(ListType PairList, const char* OutputFileName);
+    f64 CalculateHaversine(HPair Pair);
+    f64 CalculateAverage(HList List);
+    HList GenerateDataUniform(int PairCount, int Seed);
+    HList GenerateDataClustered(int PairCount, int Seed, int ClusterCount);
+    void PrintData(HList List);
+    void WriteDataAsBinary(HList List, const char* FileName);
+    void WriteDataAsJSON(HList List, const char* FileName);
 }
 
 #endif // HAVERSINE_REF0_H
