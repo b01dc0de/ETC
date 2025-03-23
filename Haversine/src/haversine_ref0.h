@@ -23,7 +23,19 @@ namespace Haversine_Ref0
     void WriteDataAsJSON(HList List, const char* FileName);
     HList ReadFileAsBinary(const char* FileName);
     HList ReadFileAsJSON(const char* FileName);
+
+    struct FileContentsT
+    {
+        int Size;
+        u8* Data;
+
+        void Release();
+        void Read(const char* FileName, bool bAppendNull = false);
+        void Write(const char* FileName);
+    };
 }
+
+#include "haversine_ref0.inl"
 
 #endif // HAVERSINE_REF0_H
 

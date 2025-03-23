@@ -1,0 +1,8 @@
+{
+    "test-string": "test-value",
+    "test-int": 12,
+    "test-float": 34.4567,
+    "test-null": null,
+    "test-bool-true": true,
+    "test-bool-false": false
+}

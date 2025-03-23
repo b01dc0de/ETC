@@ -1,5 +1,5 @@
 .vs/
 build/
 
-*.f64
-*.json
+Haversine/output*.f64
+Haversine/output*.json

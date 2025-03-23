@@ -1,4 +1,5 @@
 #include "haversine_ref0.h"
+#include "haversine_ref0_json.h"
 
 constexpr double CoordinateMin = -180.0;
 constexpr double CoordinateMax = +180.0;
@@ -41,75 +42,6 @@ namespace Haversine_Ref0_Helpers
 
         f64 Result = EarthRadius * c;
         return Result;
-    }
-}
-
-namespace Haversine_Ref0
-{
-    struct FileContentsT
-    {
-        int Size;
-        u8* Data;
-
-        void Release();
-        void Read(const char* FileName);
-        void Write(const char* FileName);
-    };
-
-    void FileContentsT::Release()
-    {
-        Size = 0;
-        if (Data)
-        {
-            delete[] Data;
-            Data = nullptr;
-        }
-    }
-
-    void FileContentsT::Read(const char* FileName)
-    {
-        if (Data) { Release(); }
-
-        FILE* FileHandle = nullptr;
-        fopen_s(&FileHandle, FileName, "rb");
-        if (FileHandle)
-        {
-            fseek(FileHandle, 0, SEEK_END);
-            long FileSize = ftell(FileHandle);
-            fseek(FileHandle, 0, SEEK_SET);
-
-            if (FileSize > 0)
-            {
-                Size = FileSize;
-                Data = new u8[FileSize];
-                fread_s(Data, Size, Size, 1, FileHandle);
-            }
-            fclose(FileHandle);
-        }
-        else
-        {
-            fprintf(stdout, "ERROR: Can't open file %s for read!\n", FileName);
-        }
-    }
-    void FileContentsT::Write(const char* FileName)
-    {
-        if (!Data)
-        {
-            fprintf(stdout, "ERROR: File contents are empty during a call to write! (%s)\n", FileName);
-            return;
-        }
-
-        FILE* FileHandle = nullptr;
-        fopen_s(&FileHandle, FileName, "wb");
-        if (FileHandle)
-        {
-            fwrite (Data, Size, 1, FileHandle);
-            fclose(FileHandle);
-        }
-        else
-        {
-            fprintf(stdout, "ERROR: Can't open file %s for write!\n", FileName);
-        }
     }
 }
 
@@ -273,5 +205,68 @@ HList Haversine_Ref0::ReadFileAsBinary(const char* FileName)
 
 HList Haversine_Ref0::ReadFileAsJSON(const char* FileName)
 {
-    return {}; // TODO: implement
+    FileContentsT Input = {};
+    Input.Read(FileName, true);
+    HList Result = ParseJSON(Input);
+    Input.Release();
+
+    return Result;
 }
+
+void Haversine_Ref0::FileContentsT::Release()
+{
+    Size = 0;
+    if (Data)
+    {
+        delete[] Data;
+        Data = nullptr;
+    }
+}
+
+void Haversine_Ref0::FileContentsT::Read(const char* FileName, bool bAppendNull)
+{
+    if (Data) { Release(); }
+
+    FILE* FileHandle = nullptr;
+    fopen_s(&FileHandle, FileName, "rb");
+    if (FileHandle)
+    {
+        fseek(FileHandle, 0, SEEK_END);
+        long FileSize = ftell(FileHandle);
+        fseek(FileHandle, 0, SEEK_SET);
+
+        if (FileSize > 0)
+        {
+            Size = FileSize + (bAppendNull ? 1 : 0);
+            Data = new u8[Size];
+            fread_s(Data, FileSize, FileSize, 1, FileHandle);
+            if (bAppendNull) { Data[Size - 1] = '\0'; }
+        }
+        fclose(FileHandle);
+    }
+    else
+    {
+        fprintf(stdout, "ERROR: Can't open file %s for read!\n", FileName);
+    }
+}
+void Haversine_Ref0::FileContentsT::Write(const char* FileName)
+{
+    if (!Data)
+    {
+        fprintf(stdout, "ERROR: File contents are empty during a call to write! (%s)\n", FileName);
+        return;
+    }
+
+    FILE* FileHandle = nullptr;
+    fopen_s(&FileHandle, FileName, "wb");
+    if (FileHandle)
+    {
+        fwrite (Data, Size, 1, FileHandle);
+        fclose(FileHandle);
+    }
+    else
+    {
+        fprintf(stdout, "ERROR: Can't open file %s for write!\n", FileName);
+    }
+}
+

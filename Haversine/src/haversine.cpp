@@ -1,5 +1,6 @@
 #include "haversine_common.h"
 #include "haversine_ref0.h"
+#include "haversine_ref0_json.h"
 
 #ifndef UNITY_BUILD
 #define UNITY_BUILD (0)
@@ -7,6 +8,7 @@
 
 #if UNITY_BUILD
 #include "haversine_ref0.cpp"
+#include "haversine_ref0_json.cpp"
 #endif // UNITY_BUILD
 
 /*
@@ -17,6 +19,14 @@
 
 int main(int ArgCount, const char* ArgValues[])
 {
+#define ENABLE_JSON_TEST() (1)
+#if ENABLE_JSON_TEST()
+    //(void)Haversine_Ref0::ReadFileAsJSON("input/test/null.json");
+    (void)Haversine_Ref0::ReadFileAsJSON("input/test/single-pair.json");
+    //(void)Haversine_Ref0::ReadFileAsJSON("input/test/simple-collection.json");
+    return 0;
+#endif // ENABLE_JSON_TEST()
+
     constexpr int DefaultCount = 10000;
     constexpr int DefaultSeed = 156208;
     constexpr int DefaultClusterCount = 8;
