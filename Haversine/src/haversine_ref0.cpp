@@ -5,7 +5,7 @@ constexpr double CoordinateMax = +180.0;
 constexpr double DegreesPerRadian = 0.01745329251994329577;
 constexpr double EarthRadius = 6372.8;
 
-namespace Ref0_Helpers
+namespace Haversine_Ref0_Helpers
 {
     // NOTE:
     //      These functions are taken directly from
@@ -48,8 +48,9 @@ namespace Haversine_Ref0
 {
     struct FileContentsT
     {
-        u8* Data;
         int Size;
+        u8* Data;
+
         void Release();
         void Read(const char* FileName);
         void Write(const char* FileName);
@@ -57,12 +58,12 @@ namespace Haversine_Ref0
 
     void FileContentsT::Release()
     {
+        Size = 0;
         if (Data)
         {
             delete[] Data;
             Data = nullptr;
         }
-        Size = 0;
     }
 
     void FileContentsT::Read(const char* FileName)
@@ -114,7 +115,7 @@ namespace Haversine_Ref0
 
 double Haversine_Ref0::CalculateHaversine(HPair Pair)
 {
-    return Ref0_Helpers::Haversine(Pair.X0, Pair.Y0, Pair.X1, Pair.Y1, EarthRadius);
+    return Haversine_Ref0_Helpers::Haversine(Pair.X0, Pair.Y0, Pair.X1, Pair.Y1, EarthRadius);
 }
 
 double Haversine_Ref0::CalculateAverage(HList List)
@@ -210,23 +211,8 @@ void Haversine_Ref0::PrintData(HList List)
 
 void Haversine_Ref0::WriteDataAsBinary(HList List, const char* FileName)
 {
-    FILE* OutputFileHandle = nullptr;
-    fopen_s(&OutputFileHandle, FileName, "wb");
-
-    if (OutputFileHandle)
-    {
-        size_t WriteCount = fwrite(List.Data, sizeof(HPair), List.Count, OutputFileHandle);
-        if (WriteCount != List.Count)
-        {
-            fprintf(stdout, "Warning: List has %d pairs but only %zd were written\n", List.Count, WriteCount);
-        }
-
-        fclose(OutputFileHandle);
-    }
-    else
-    {
-        fprintf(stdout, "ERROR: Could not open file %s for write!\n", FileName);
-    }
+    FileContentsT OutputContents = { (int)sizeof(HPair)*List.Count, (u8*)List.Data };
+    OutputContents.Write(FileName);
 }
 
 void Haversine_Ref0::WriteDataAsJSON(HList List, const char* FileName)
@@ -259,8 +245,32 @@ void Haversine_Ref0::WriteDataAsJSON(HList List, const char* FileName)
 
 HList Haversine_Ref0::ReadFileAsBinary(const char* FileName)
 {
-    return {}; // TODO: implement
+    FileContentsT InputFile = {};
+    InputFile.Read(FileName);
+
+    HList Result = {};
+
+    if (InputFile.Data)
+    {
+        if (InputFile.Size % sizeof(HPair) == 0)
+        {
+            Result.Count = InputFile.Size / sizeof(HPair);
+            Result.Data = (HPair*)InputFile.Data;
+            InputFile = {};
+        }
+        else
+        {
+            fprintf(stdout, "ERROR: When reading file %s, file data not formatted correctly!\n", FileName);
+            InputFile.Release();
+        }
+    }
+    else
+    {
+        fprintf(stdout, "ERROR: Could not open file %s!\n", FileName);
+    }
+    return Result;
 }
+
 HList Haversine_Ref0::ReadFileAsJSON(const char* FileName)
 {
     return {}; // TODO: implement
