@@ -72,6 +72,7 @@ namespace Haversine_Ref0
             if (0 == Literal[ReadIdx]) { break; } // Match!
             else if (0 == Begin[ReadIdx]) { bMatch = false; }
             else if (Literal[ReadIdx] != Begin[ReadIdx]) { bMatch = false; }
+            ReadIdx++;
         }
         return bMatch;
     }
@@ -92,6 +93,9 @@ namespace Haversine_Ref0
         static constexpr const char* LiteralNull = "null";
         static constexpr const char* LiteralTrue = "true";
         static constexpr const char* LiteralFalse = "false";
+        static constexpr const int LiteralNull_Length = 4;
+        static constexpr const int LiteralTrue_Length = 4;
+        static constexpr const int LiteralFalse_Length = 5;
 
         enum StateType
         {
@@ -226,7 +230,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             {
                 if (TryMatchLiteral(JsonData + ReadIdx, LiteralNull))
                 {
-                    ReadIdx += sizeof(LiteralNull-1);
+                    ReadIdx += LiteralNull_Length;
                 }
                 else { State = ParseState_Error; }
                 bDone = true;
@@ -235,7 +239,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             {
                 if (TryMatchLiteral(JsonData + ReadIdx, LiteralTrue))
                 {
-                    ReadIdx += sizeof(LiteralTrue-1);
+                    ReadIdx += LiteralTrue_Length;
                     CurrObject->Value.Type = JsonType_Bool;
                     CurrObject->Value.Bool = true;
                 }
@@ -246,7 +250,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             {
                 if (TryMatchLiteral(JsonData + ReadIdx, LiteralFalse))
                 {
-                    ReadIdx += sizeof(LiteralFalse-1);
+                    ReadIdx += LiteralFalse_Length;
                     CurrObject->Value.Type = JsonType_Bool;
                     CurrObject->Value.Bool = false;
                 }
@@ -357,7 +361,11 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
                     State = ParseState_End;
                     bReading = false;
                 } break;
-                default: { } break;
+                case '\0': // End of file
+                {
+                    State = ParseState_Error;
+                    bReading = false;
+                } break;
             }
             ReadIdx++;
         }
@@ -421,9 +429,9 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
         };
 
         fprintf(stdout, "[json][debug] Advance:\n");
-        fprintf(stdout, "\t\tBeginState: %s, StartIdx: %d '%c' 0x%x)\n",
+        fprintf(stdout, "\t\tBeginState: %s, StartIdx: %d '%c' (0x%x)\n",
                 GetStateName(BeginState), StartIdx, GetPrintableChar(JsonData[StartIdx]), JsonData[StartIdx]);
-        fprintf(stdout, "\t\tEndState: %s, EndIdx: %d '%c' 0x%x)\n",
+        fprintf(stdout, "\t\tEndState: %s, EndIdx: %d '%c' (0x%x)\n",
                 GetStateName(State), ReadIdx, GetPrintableChar(JsonData[ReadIdx]), JsonData[ReadIdx]);
     }
     return ReadIdx;
