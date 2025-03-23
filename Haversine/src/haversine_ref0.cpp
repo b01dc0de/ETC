@@ -44,6 +44,74 @@ namespace Ref0_Helpers
     }
 }
 
+namespace Haversine_Ref0
+{
+    struct FileContentsT
+    {
+        u8* Data;
+        int Size;
+        void Release();
+        void Read(const char* FileName);
+        void Write(const char* FileName);
+    };
+
+    void FileContentsT::Release()
+    {
+        if (Data)
+        {
+            delete[] Data;
+            Data = nullptr;
+        }
+        Size = 0;
+    }
+
+    void FileContentsT::Read(const char* FileName)
+    {
+        if (Data) { Release(); }
+
+        FILE* FileHandle = nullptr;
+        fopen_s(&FileHandle, FileName, "rb");
+        if (FileHandle)
+        {
+            fseek(FileHandle, 0, SEEK_END);
+            long FileSize = ftell(FileHandle);
+            fseek(FileHandle, 0, SEEK_SET);
+
+            if (FileSize > 0)
+            {
+                Size = FileSize;
+                Data = new u8[FileSize];
+                fread_s(Data, Size, Size, 1, FileHandle);
+            }
+            fclose(FileHandle);
+        }
+        else
+        {
+            fprintf(stdout, "ERROR: Can't open file %s for read!\n", FileName);
+        }
+    }
+    void FileContentsT::Write(const char* FileName)
+    {
+        if (!Data)
+        {
+            fprintf(stdout, "ERROR: File contents are empty during a call to write! (%s)\n", FileName);
+            return;
+        }
+
+        FILE* FileHandle = nullptr;
+        fopen_s(&FileHandle, FileName, "wb");
+        if (FileHandle)
+        {
+            fwrite (Data, Size, 1, FileHandle);
+            fclose(FileHandle);
+        }
+        else
+        {
+            fprintf(stdout, "ERROR: Can't open file %s for write!\n", FileName);
+        }
+    }
+}
+
 double Haversine_Ref0::CalculateHaversine(HPair Pair)
 {
     return Ref0_Helpers::Haversine(Pair.X0, Pair.Y0, Pair.X1, Pair.Y1, EarthRadius);
