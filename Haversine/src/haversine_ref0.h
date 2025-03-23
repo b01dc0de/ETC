@@ -21,6 +21,8 @@ namespace Haversine_Ref0
     void PrintData(HList List);
     void WriteDataAsBinary(HList List, const char* FileName);
     void WriteDataAsJSON(HList List, const char* FileName);
+    HList ReadFileAsBinary(const char* FileName);
+    HList ReadFileAsJSON(const char* FileName);
 }
 
 #endif // HAVERSINE_REF0_H

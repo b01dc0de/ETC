@@ -20,19 +20,22 @@ int main(int ArgCount, const char* ArgValues[])
     constexpr int DefaultCount = 10000;
     constexpr int DefaultSeed = 156208;
     constexpr int DefaultClusterCount = 8;
+
+    constexpr int BufferSize = 64;
     if (ArgCount == 2 && strcmp(ArgValues[1], "default") == 0)
     {
-        constexpr int BufferSize = 64;
-        char OutputFileName[BufferSize];
+        char JSONFileName[BufferSize];
+        char BinaryFileName[BufferSize];
 
         HList PairList = Haversine_Ref0::GenerateDataClustered(DefaultCount, DefaultSeed, DefaultClusterCount);
-        int OutputFileNameSize = sprintf_s(
-                OutputFileName,
-                "output_count%d_seed%d_clusters%d.json",
-                DefaultCount,
-                DefaultSeed,
-                DefaultClusterCount);
-        Haversine_Ref0::WriteDataAsJSON(PairList, OutputFileName);
+        (void)sprintf_s(JSONFileName, "output_count%d_seed%d_clusters%d.json",
+                DefaultCount, DefaultSeed, DefaultClusterCount);
+        (void)sprintf_s(BinaryFileName, "output_count%d_seed%d_clusters%d.f64",
+                DefaultCount, DefaultSeed, DefaultClusterCount);
+        Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
+        Haversine_Ref0::WriteDataAsBinary(PairList, BinaryFileName);
+        fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
+        fprintf(stdout, "Wrote data to file %s\n", BinaryFileName); 
     }
     else if (ArgCount < 4)
     {
@@ -47,16 +50,18 @@ int main(int ArgCount, const char* ArgValues[])
         int Seed = strtol(ArgValues[2], nullptr, 10);
         int ClusterCount = strtol(ArgValues[3], nullptr, 10);
 
-        constexpr int BufferSize = 64;
-        char OutputFileName[BufferSize];
+        char JSONFileName[BufferSize];
+        char BinaryFileName[BufferSize];
+
         HList PairList = Haversine_Ref0::GenerateDataClustered(PairCount, Seed, ClusterCount);
-        int OutputFileNameSize = sprintf_s(
-                OutputFileName,
-                "output_count%d_seed%d_clusters%d.json",
-                DefaultCount,
-                DefaultSeed,
-                DefaultClusterCount);
-        Haversine_Ref0::WriteDataAsJSON(PairList, OutputFileName);
+        (void)sprintf_s(JSONFileName, "output_count%d_seed%d_clusters%d.json",
+                PairCount, Seed, ClusterCount);
+        (void)sprintf_s(BinaryFileName, "output_count%d_seed%d_clusters%d.f64",
+                PairCount, Seed, ClusterCount);
+        Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
+        Haversine_Ref0::WriteDataAsBinary(PairList, BinaryFileName);
+        fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
+        fprintf(stdout, "Wrote data to file %s\n", BinaryFileName); 
     }
 }
 

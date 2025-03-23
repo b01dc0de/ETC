@@ -140,10 +140,31 @@ void Haversine_Ref0::PrintData(HList List)
     }
 }
 
-void Haversine_Ref0::WriteDataAsJSON(HList List, const char* OutputFileName)
+void Haversine_Ref0::WriteDataAsBinary(HList List, const char* FileName)
 {
     FILE* OutputFileHandle = nullptr;
-    fopen_s(&OutputFileHandle, OutputFileName, "wt");
+    fopen_s(&OutputFileHandle, FileName, "wb");
+
+    if (OutputFileHandle)
+    {
+        size_t WriteCount = fwrite(List.Data, sizeof(HPair), List.Count, OutputFileHandle);
+        if (WriteCount != List.Count)
+        {
+            fprintf(stdout, "Warning: List has %d pairs but only %zd were written\n", List.Count, WriteCount);
+        }
+
+        fclose(OutputFileHandle);
+    }
+    else
+    {
+        fprintf(stdout, "ERROR: Could not open file %s for write!\n", FileName);
+    }
+}
+
+void Haversine_Ref0::WriteDataAsJSON(HList List, const char* FileName)
+{
+    FILE* OutputFileHandle = nullptr;
+    fopen_s(&OutputFileHandle, FileName, "wt");
 
     if (OutputFileHandle)
     {
@@ -164,7 +185,15 @@ void Haversine_Ref0::WriteDataAsJSON(HList List, const char* OutputFileName)
     }
     else
     {
-        fprintf(stdout, "ERROR: Could not open file %s for write!\n", OutputFileName);
+        fprintf(stdout, "ERROR: Could not open file %s for write!\n", FileName);
     }
 }
 
+HList Haversine_Ref0::ReadFileAsBinary(const char* FileName)
+{
+    return {}; // TODO: implement
+}
+HList Haversine_Ref0::ReadFileAsJSON(const char* FileName)
+{
+    return {}; // TODO: implement
+}
