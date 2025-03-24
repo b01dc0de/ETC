@@ -63,6 +63,13 @@ namespace Haversine_Ref0
         return CharIsAlpha(C) ||
             CharIsNumeric(C);
     }
+    bool CharIsWhiteSpace(char C)
+    {
+        return C == ' ' ||
+            C == '\n' ||
+            C == '\r' ||
+            C == '\t';
+    }
     bool TryMatchLiteral(char* Begin, const char* Literal)
     {
         bool bMatch = true;
@@ -88,14 +95,17 @@ namespace Haversine_Ref0
         return ReadIdx;
     }
 
+#define DEF_LITERAL_VAL(lit_val) \
+        static constexpr const char* Literal_##lit_val = #lit_val; \
+        static constexpr const int Literal_##lit_val##_Length = sizeof(#lit_val)-1;
+#define LITERAL_VAL(lit_val) (Literal_##lit_val)
+#define LITERAL_VAL_LENGTH(lit_val) (Literal_##lit_val##_Length)
+
     struct ParseJsonStateMachine
     {
-        static constexpr const char* LiteralNull = "null";
-        static constexpr const char* LiteralTrue = "true";
-        static constexpr const char* LiteralFalse = "false";
-        static constexpr const int LiteralNull_Length = 4;
-        static constexpr const int LiteralTrue_Length = 4;
-        static constexpr const int LiteralFalse_Length = 5;
+        DEF_LITERAL_VAL(null);
+        DEF_LITERAL_VAL(true);
+        DEF_LITERAL_VAL(false);
 
         enum StateType
         {
@@ -138,7 +148,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartI
             {
                 State = ParseState_Key;
                 // TODO: Clean up this syntax:
-                CurrObject = &Root->Objects[Root->Objects.Add(JsonObject{})];
+                CurrObject = Root->Objects.Add_Ref(JsonObject{});
                 bDone = true;
             } break;
             case '}': { State = ParseState_End; bDone = true; } break;
@@ -191,7 +201,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
                                 CurrObject->Value.String = CurrObject->Key;
                                 CurrObject->Key = nullptr;
                                 // TODO: This will require adjusting when we start adding depth traversal
-                                CurrObject = &Root->Objects[Root->Objects.Add(JsonObject{})];
+                                CurrObject = Root->Objects.Add_Ref(JsonObject{});
                                 bValueStart = true;
                                 // Keep state the same, try to read the next objects' key
                             } break;
@@ -228,18 +238,19 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             // Try to parse value type
             case 'n': // Type is null
             {
-                if (TryMatchLiteral(JsonData + ReadIdx, LiteralNull))
+
+                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(null)))
                 {
-                    ReadIdx += LiteralNull_Length;
+                    ReadIdx += LITERAL_VAL_LENGTH(null);
                 }
                 else { State = ParseState_Error; }
                 bDone = true;
             } break;
             case 't': // Type is bool
             {
-                if (TryMatchLiteral(JsonData + ReadIdx, LiteralTrue))
+                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(true)))
                 {
-                    ReadIdx += LiteralTrue_Length;
+                    ReadIdx += LITERAL_VAL_LENGTH(true);
                     CurrObject->Value.Type = JsonType_Bool;
                     CurrObject->Value.Bool = true;
                 }
@@ -248,9 +259,9 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             } break;
             case 'f': // Type is bool
             {
-                if (TryMatchLiteral(JsonData + ReadIdx, LiteralFalse))
+                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(false)))
                 {
-                    ReadIdx += LiteralFalse_Length;
+                    ReadIdx += LITERAL_VAL_LENGTH(false);
                     CurrObject->Value.Type = JsonType_Bool;
                     CurrObject->Value.Bool = false;
                 }
@@ -433,6 +444,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
                 GetStateName(BeginState), StartIdx, GetPrintableChar(JsonData[StartIdx]), JsonData[StartIdx]);
         fprintf(stdout, "\t\tEndState: %s, EndIdx: %d '%c' (0x%x)\n",
                 GetStateName(State), ReadIdx, GetPrintableChar(JsonData[ReadIdx]), JsonData[ReadIdx]);
+        fprintf(stdout, "JSON Parsed:%.*s\n", ReadIdx - StartIdx, JsonData + StartIdx);
     }
     return ReadIdx;
 }
