@@ -1,7 +1,91 @@
 #include "haversine_ref0_json.h"
 
+namespace Haversine_Ref0_JsonHelpers
+{
+    bool CharIsNumeric(char C)
+    {
+        return ('0' <= C && C <= '9');
+    }
+    bool CharIsAlpha(char C)
+    {
+        return ('a' <= C && C <= 'z') ||
+            ('A' <= C && C <= 'Z');
+   }
+    bool CharIsAlphanumeric(char C)
+    {
+        return CharIsAlpha(C) ||
+            CharIsNumeric(C);
+    }
+    bool CharIsWhiteSpace(char C)
+    {
+        return C == ' ' ||
+            C == '\n' ||
+            C == '\r' ||
+            C == '\t';
+    }
+    bool TryMatchLiteral(char* Begin, const char* Literal)
+    {
+        bool bMatch = true;
+        int ReadIdx = 0;
+        while (bMatch)
+        {
+            if (0 == Literal[ReadIdx]) { break; } // Match!
+            else if (0 == Begin[ReadIdx]) { bMatch = false; }
+            else if (Literal[ReadIdx] != Begin[ReadIdx]) { bMatch = false; }
+            ReadIdx++;
+        }
+        return bMatch;
+    }
+    bool TryReadString(char* Begin, char** End, char** ParsedString)
+    {
+        if (Begin[0] != '"' || !ParsedString) { return false; }
+        int ReadIdx = 1;
+        while (Begin[ReadIdx] != '"')
+        {
+            // TODO: Make this _way_ more robust
+            ReadIdx++;
+        }
+        if (ReadIdx > 1)
+        {
+            *ParsedString = new char[ReadIdx];
+            memcpy(*ParsedString, Begin + 1, ReadIdx - 1);
+            (*ParsedString)[ReadIdx-1] = '\0';
+        }
+        else
+        {
+            *ParsedString = nullptr;
+        }
+        if (End) { *End = Begin + ReadIdx; }
+        return true;
+    }
+    bool TryReadUntilValueBegin(char* Begin, char** End)
+    {
+        if (!End) { return false; }
+        int ReadIdx = 0;
+        while (true)
+        {
+            switch (Begin[ReadIdx])
+            {
+                case ':':
+                {
+                    *End = Begin + ReadIdx + 1;
+                    return true;
+                } break;
+                case '"':
+                case '\0':
+                {
+                    return false;
+                } break;
+            }
+            ReadIdx++;
+        }
+        return false;
+    }
+}
+
 namespace Haversine_Ref0
 {
+    using namespace Haversine_Ref0_JsonHelpers;
     using b64 = u64;
     // Forward type decls:
     struct JsonObject;
@@ -49,51 +133,6 @@ namespace Haversine_Ref0
         DynamicArray<JsonObject> Objects;
     };
 
-    bool CharIsNumeric(char C)
-    {
-        return ('0' <= C && C <= '9');
-    }
-    bool CharIsAlpha(char C)
-    {
-        return ('a' <= C && C <= 'z') ||
-            ('A' <= C && C <= 'Z');
-   }
-    bool CharIsAlphanumeric(char C)
-    {
-        return CharIsAlpha(C) ||
-            CharIsNumeric(C);
-    }
-    bool CharIsWhiteSpace(char C)
-    {
-        return C == ' ' ||
-            C == '\n' ||
-            C == '\r' ||
-            C == '\t';
-    }
-    bool TryMatchLiteral(char* Begin, const char* Literal)
-    {
-        bool bMatch = true;
-        int ReadIdx = 0;
-        while (bMatch)
-        {
-            if (0 == Literal[ReadIdx]) { break; } // Match!
-            else if (0 == Begin[ReadIdx]) { bMatch = false; }
-            else if (Literal[ReadIdx] != Begin[ReadIdx]) { bMatch = false; }
-            ReadIdx++;
-        }
-        return bMatch;
-    }
-    int TryReadString(char* Begin)
-    {
-        int ReadIdx = 0;
-        while (Begin[ReadIdx] != '"')
-        {
-            // TODO: Make this _way_ more robust
-            if (Begin[ReadIdx] == '\0') { return -1; }
-            ReadIdx++;
-        }
-        return ReadIdx;
-    }
 
 #define DEF_LITERAL_VAL(lit_val) \
         static constexpr const char* Literal_##lit_val = #lit_val; \
@@ -159,6 +198,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartI
     }
     return ReadIdx;
 }
+
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartIdx)
 {
     int ReadIdx = StartIdx;
@@ -169,48 +209,25 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
         {
             case '"':
             {
-                ReadIdx++;
-                { // Read key:
-                    int KeyNameIdx = ReadIdx;
-                    while (JsonData[KeyNameIdx] != '"')
+                char* RightQuote = nullptr;
+                if (TryReadString(JsonData + ReadIdx, &RightQuote, &CurrObject->Key))
+                {
+                    ReadIdx = RightQuote - JsonData + 1;
+
+                    char* CharAfterColon = nullptr;
+                    if (TryReadUntilValueBegin(JsonData + ReadIdx, &CharAfterColon))
                     {
-                        KeyNameIdx++;
+                        State = ParseState_Value;
+                        ReadIdx = CharAfterColon - JsonData;
                     }
-                    int KeyNameLength = KeyNameIdx - ReadIdx;
-                    CurrObject->Key = new char[KeyNameLength+1];
-                    memcpy(CurrObject->Key, JsonData + ReadIdx, KeyNameLength);
-                    CurrObject->Key[KeyNameLength] = '\0';
-                    ReadIdx = KeyNameIdx + 1;
+                    else
+                    {
+                        State = ParseState_Error;
+                    }
                 }
-                { // Read until ':' or ','
-                    int ValueIdx = ReadIdx;
-                    bool bValueStart = false;
-                    while (!bValueStart)
-                    {
-                        switch (JsonData[ValueIdx])
-                        {
-                            case ':':
-                            {
-                                State = ParseState_Value;
-                                bValueStart = true;
-                            } break;
-                            case ',':
-                            {
-                                // We were actually reading the string value here, _not_ the key, so swap them
-                                CurrObject->Value.Type = JsonType_String;
-                                CurrObject->Value.String = CurrObject->Key;
-                                CurrObject->Key = nullptr;
-                                // TODO: This will require adjusting when we start adding depth traversal
-                                CurrObject = Root->Objects.Add_RetPtr(JsonObject{});
-                                bValueStart = true;
-                                // Keep state the same, try to read the next objects' key
-                            } break;
-                            default: { } break;
-                        }
-                        ValueIdx++;
-                    }
-                    ReadIdx = ValueIdx;
-                    bDone = true;
+                else
+                {
+                    State = ParseState_Error;
                 }
             } break;
             case '}':
@@ -227,6 +244,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
     }
     return ReadIdx;
 }
+
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int StartIdx)
 {
     int ReadIdx = StartIdx;
@@ -277,21 +295,15 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
                 }
                 else 
                 {
-                    ReadIdx++;
                     CurrObject->Value.Type = JsonType_String;
-                    int ValueStringLength = TryReadString(JsonData + ReadIdx);
-                    if (ValueStringLength <= -1) { State = ParseState_Error; }
-                    else if (ValueStringLength == 0) // Empty string
+                    char* RightQuote = nullptr;
+                    if (TryReadString(JsonData + ReadIdx, &RightQuote, &CurrObject->Value.String))
                     {
-                        CurrObject->Value.String = "";
-                        ReadIdx += ValueStringLength + 1;
+                        ReadIdx = RightQuote - JsonData + 1;
                     }
-                    else // Valid value read
+                    else
                     {
-                        CurrObject->Value.String = new char[ValueStringLength + 1];
-                        memcpy(CurrObject->Value.String, JsonData + ReadIdx, ValueStringLength);
-                        CurrObject->Value.String[ValueStringLength] = '\0';
-                        ReadIdx += ValueStringLength + 1;
+                        State = ParseState_Error;
                     }
                 }
                 bDone = true;
@@ -362,7 +374,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             {
                 case ',': // There is another object
                 {
-                    CurrObject = &Root->Objects[Root->Objects.Add(JsonObject{})];
+                    CurrObject = Root->Objects.Add_RetPtr(JsonObject{});
                     State = ParseState_Key;
                     bReading = false;
                 } break;
@@ -383,6 +395,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
     }
     return ReadIdx;
 }
+
 int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
 {
     StateType BeginState = State;
