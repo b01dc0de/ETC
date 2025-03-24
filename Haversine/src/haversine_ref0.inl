@@ -50,7 +50,7 @@ namespace Haversine_Ref0
             Data[Num++] = Item;
             return NewItemIdx;
         }
-        T* Add_Ptr(T Item)
+        T* Add_RetPtr(T Item)
         {
             int NewItemIdx = Add(Item);
             return &Data[NewItemIdx];

@@ -148,7 +148,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartI
             {
                 State = ParseState_Key;
                 // TODO: Clean up this syntax:
-                CurrObject = Root->Objects.Add_Ref(JsonObject{});
+                CurrObject = Root->Objects.Add_RetPtr(JsonObject{});
                 bDone = true;
             } break;
             case '}': { State = ParseState_End; bDone = true; } break;
@@ -201,7 +201,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
                                 CurrObject->Value.String = CurrObject->Key;
                                 CurrObject->Key = nullptr;
                                 // TODO: This will require adjusting when we start adding depth traversal
-                                CurrObject = Root->Objects.Add_Ref(JsonObject{});
+                                CurrObject = Root->Objects.Add_RetPtr(JsonObject{});
                                 bValueStart = true;
                                 // Keep state the same, try to read the next objects' key
                             } break;
