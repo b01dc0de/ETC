@@ -21,9 +21,11 @@ int main(int ArgCount, const char* ArgValues[])
 {
 #define ENABLE_JSON_TEST() (1)
 #if ENABLE_JSON_TEST()
-    //(void)Haversine_Ref0::ReadFileAsJSON("input/test/null.json");
-    //(void)Haversine_Ref0::ReadFileAsJSON("input/test/single-pair.json");
+    (void)Haversine_Ref0::ReadFileAsJSON("input/test/null.json");
+    (void)Haversine_Ref0::ReadFileAsJSON("input/test/single-pair.json");
     (void)Haversine_Ref0::ReadFileAsJSON("input/test/simple-collection.json");
+    (void)Haversine_Ref0::ReadFileAsJSON("input/test/nested-example.json");
+
     return 0;
 #endif // ENABLE_JSON_TEST()
 

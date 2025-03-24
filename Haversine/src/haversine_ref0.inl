@@ -55,9 +55,19 @@ namespace Haversine_Ref0
             int NewItemIdx = Add(Item);
             return &Data[NewItemIdx];
         }
+        void RemoveLast()
+        {
+            // NOTE: We aren't doing _any_ cleanup here for now
+            Num--;
+        }
         T& operator[](int Idx)
         {
             return Data[Idx];
+        }
+        T& Last()
+        {
+            if (Num > 0) return Data[Num-1];
+            else return Data[0];
         }
     };
 }
