@@ -235,7 +235,7 @@ namespace Haversine_Ref0
         int Parse_Key(char* JsonData, int StartIdx);
         int Parse_Value(char* JsonData, int StartIdx);
         int Parse_Array(char* JsonData, int StartIdx);
-        int Advance(char* JsonData, int StartIdx);
+        bool Advance(char* JsonData, int* Idx);
     };
 }
 
@@ -314,7 +314,6 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
         if (State == ParseState_Key) { ReadIdx++; }
     }
     bool bAdvToNextSigChar = true;
-    bool bFoundColon = false;
     while (bAdvToNextSigChar)
     {
         switch (JsonData[ReadIdx])
@@ -322,16 +321,8 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
             // Valid
             case ':':
             {
-                // Multiple colons
-                if (bFoundColon)
-                {
-                    State = ParseState_Error;
-                    bAdvToNextSigChar = false;
-                }
-                else
-                {
-                    bFoundColon = true;
-                }
+                bAdvToNextSigChar = false;
+                ReadIdx++;
             } break;
             case '"':
             case ',':
@@ -637,10 +628,11 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Array(char* JsonData, int Start
     return ReadIdx;
 }
 
-int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
+bool Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int* Idx)
 {
     StateType BeginState = State;
-    int ReadIdx = StartIdx;
+    int BeginIdx = *Idx;
+    int ReadIdx = *Idx;
     switch (State)
     {
         case ParseState_Root:
@@ -662,10 +654,10 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
         case ParseState_End:
         {
             // TODO: Error handling(?)
-            while (JsonData[ReadIdx] != '\0')
-            {
-                ReadIdx++;
-            }
+            /*
+             * while (JsonData[ReadIdx] != '\0') { ReadIdx++; }
+             */
+
         } break;
     }
     constexpr bool bDebugTracePrint = true;
@@ -698,13 +690,14 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
         };
 
         fprintf(stdout, "[json][debug] Advance:\n");
-        fprintf(stdout, "\t\tBeginState: %s, StartIdx: %d '%c' (0x%x)\n",
-                GetStateName(BeginState), StartIdx, GetPrintableChar(JsonData[StartIdx]), JsonData[StartIdx]);
+        fprintf(stdout, "\t\tBeginState: %s, BeginIdx: %d '%c' (0x%x)\n",
+                GetStateName(BeginState), BeginIdx, GetPrintableChar(JsonData[BeginIdx]), JsonData[BeginIdx]);
         fprintf(stdout, "\t\tEndState: %s, EndIdx: %d '%c' (0x%x)\n\n",
                 GetStateName(State), ReadIdx, GetPrintableChar(JsonData[ReadIdx]), JsonData[ReadIdx]);
-        fprintf(stdout, "\t\tJSON Parsed:%.*s\n\n", ReadIdx - StartIdx, JsonData + StartIdx);
+        fprintf(stdout, "\t\tJSON Parsed:%.*s\n\n", ReadIdx - BeginIdx, JsonData + BeginIdx);
     }
-    return ReadIdx;
+    *Idx = ReadIdx;
+    return (State != ParseState_End && State != ParseState_Error);
 }
 
 HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
@@ -716,16 +709,14 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
     ParseJsonStateMachine StateMachine = {};
     StateMachine.Init(&Root);
 
-    bool bError = false;
     char* pRead = (char*)InputFile.Data;
     int ReadIdx = 0;
-    while (!bError && ReadIdx < InputFile.Size)
+    while (ReadIdx < InputFile.Size &&
+            StateMachine.Advance(pRead, &ReadIdx))
     {
-        ReadIdx = StateMachine.Advance(pRead, ReadIdx);
-        bError = StateMachine.Error();
     }
 
-    if (bError)
+    if (StateMachine.Error())
     {
         fprintf(stdout, "[json]: Error while parsing!\n");
     }
