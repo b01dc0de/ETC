@@ -259,8 +259,8 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartI
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartIdx)
 {
     int ReadIdx = StartIdx;
-    bool bThisKey = true;
-    while (State == ParseState_Key && bThisKey)
+    bool bStartKey = true;
+    while (State == ParseState_Key && bStartKey)
     {
         switch (JsonData[ReadIdx])
         {
@@ -302,25 +302,68 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
                         State = ParseState_Array;
                     }
                 }
+                ReadIdx++;
+                bStartKey = false;
+                return ReadIdx;
             } break;
             case '\0':
             {
                 State = ParseState_Error;
             } break;
         }
-        ReadIdx++;
+        if (State == ParseState_Key) { ReadIdx++; }
+    }
+    bool bAdvToNextSigChar = true;
+    bool bFoundColon = false;
+    while (bAdvToNextSigChar)
+    {
+        switch (JsonData[ReadIdx])
+        {
+            // Valid
+            case ':':
+            {
+                // Multiple colons
+                if (bFoundColon)
+                {
+                    State = ParseState_Error;
+                    bAdvToNextSigChar = false;
+                }
+                else
+                {
+                    bFoundColon = true;
+                }
+            } break;
+            case '"':
+            case ',':
+            case '[':
+            case '{':
+            {
+                bAdvToNextSigChar = false;
+            } break;
+            case '}':
+            case ']':
+            case '\0':
+            {
+                State = ParseState_Error;
+                bAdvToNextSigChar = false;
+            } break;
+        }
+        if (bAdvToNextSigChar) { ReadIdx++; }
     }
     return ReadIdx;
 }
 
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int StartIdx)
 {
+    /*
+    // TODO: Commented this out due to false positives triggering when we did read a key, but it was null (""), how should this be handled/marked?
     if (nullptr == Stack.Top().Last()->Key)
     {
         // If we haven't read a key yet, then this indicates a bug in Parse_Key
         State = ParseState_Error;
         return StartIdx;
     }
+    */
 
     int ReadIdx = StartIdx;
     bool bDone = false;
@@ -545,6 +588,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Array(char* JsonData, int Start
                 pArray->Last()->Value.Type = JsonType_Array;
                 DynamicArray<JsonObject*>* NewArray = new DynamicArray<JsonObject*>;
                 pArray->Last()->Value.pArray = NewArray;
+                ReadIdx++;
                 Stack.Push(JsonType_Array, NewArray);
                 State = ParseState_Array;
                 bStartArray = false;
@@ -586,7 +630,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Array(char* JsonData, int Start
             bExpectCommaOrEnd = true;
         }
 
-        if (State == ParseState_Array)
+        if (State == ParseState_Array && bStartArray)
         {
             ReadIdx++;
         }
@@ -626,7 +670,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
             ReadIdx++;
         } break;
     }
-    constexpr bool bDebugTracePrint = false;
+    constexpr bool bDebugTracePrint = true;
     if (bDebugTracePrint)
     {
         auto GetStateName = [](StateType InState) -> const char*
