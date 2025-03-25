@@ -155,7 +155,7 @@ void Haversine_Ref0::WriteDataAsJSON(HList List, const char* FileName)
     if (OutputFileHandle)
     {
         fprintf(OutputFileHandle, "{\n");
-        fprintf(OutputFileHandle, "    \"Pairs\": [\n");
+        fprintf(OutputFileHandle, "    \"pairs\": [\n");
         for (int PairIdx = 0; PairIdx < List.Count; PairIdx++)
         {
             fprintf(OutputFileHandle,

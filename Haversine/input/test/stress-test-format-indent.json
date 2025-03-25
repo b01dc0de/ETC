@@ -1,0 +1,30 @@
+{
+    "test-key-no-whitespace": {
+        "nest-key0": {},
+        "nest-key1": [
+            null,
+            null,
+            true,
+            false,
+            0,
+            1
+        ],
+        "nest-key2": [
+            {
+                "": ""
+            },
+            {},
+            {},
+            [
+                {
+                    "nest-key3": [
+                        {
+                            "nest-key4": "nest-val0"
+                        },
+                        {}
+                    ]
+                }
+            ]
+        ]
+    }
+}
