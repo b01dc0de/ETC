@@ -507,7 +507,6 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Array(char* JsonData, int StartIdx)
 {
     DynamicArray<JsonObject*>* pArray = &Stack.Top();
-    // TODO: Make this more robust, try to verify that Stack.Top() was an ArrayType
     if (!pArray) { State = ParseState_Error; }
     int ReadIdx = StartIdx;
     bool bStartArray = true;
@@ -667,7 +666,6 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
             {
                 ReadIdx++;
             }
-            ReadIdx++;
         } break;
     }
     constexpr bool bDebugTracePrint = true;
