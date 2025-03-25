@@ -1,91 +1,7 @@
 #include "haversine_ref0_json.h"
 
-namespace Haversine_Ref0_JsonHelpers
-{
-    bool CharIsNumeric(char C)
-    {
-        return ('0' <= C && C <= '9');
-    }
-    bool CharIsAlpha(char C)
-    {
-        return ('a' <= C && C <= 'z') ||
-            ('A' <= C && C <= 'Z');
-   }
-    bool CharIsAlphanumeric(char C)
-    {
-        return CharIsAlpha(C) ||
-            CharIsNumeric(C);
-    }
-    bool CharIsWhiteSpace(char C)
-    {
-        return C == ' ' ||
-            C == '\n' ||
-            C == '\r' ||
-            C == '\t';
-    }
-    bool TryMatchLiteral(char* Begin, const char* Literal)
-    {
-        bool bMatch = true;
-        int ReadIdx = 0;
-        while (bMatch)
-        {
-            if (0 == Literal[ReadIdx]) { break; } // Match!
-            else if (0 == Begin[ReadIdx]) { bMatch = false; }
-            else if (Literal[ReadIdx] != Begin[ReadIdx]) { bMatch = false; }
-            ReadIdx++;
-        }
-        return bMatch;
-    }
-    bool TryReadString(char* Begin, char** End, char** ParsedString)
-    {
-        if (Begin[0] != '"' || !ParsedString) { return false; }
-        int ReadIdx = 1;
-        while (Begin[ReadIdx] != '"')
-        {
-            // TODO: Make this _way_ more robust
-            ReadIdx++;
-        }
-        if (ReadIdx > 1)
-        {
-            *ParsedString = new char[ReadIdx];
-            memcpy(*ParsedString, Begin + 1, ReadIdx - 1);
-            (*ParsedString)[ReadIdx-1] = '\0';
-        }
-        else
-        {
-            *ParsedString = nullptr;
-        }
-        if (End) { *End = Begin + ReadIdx; }
-        return true;
-    }
-    bool TryReadUntilValueBegin(char* Begin, char** End)
-    {
-        if (!End) { return false; }
-        int ReadIdx = 0;
-        while (true)
-        {
-            switch (Begin[ReadIdx])
-            {
-                case ':':
-                {
-                    *End = Begin + ReadIdx + 1;
-                    return true;
-                } break;
-                case '"':
-                case '\0':
-                {
-                    return false;
-                } break;
-            }
-            ReadIdx++;
-        }
-        return false;
-    }
-}
-
 namespace Haversine_Ref0
 {
-    using namespace Haversine_Ref0_JsonHelpers;
     using b64 = u64;
     // Forward type decls:
     struct JsonObject;
@@ -130,20 +46,156 @@ namespace Haversine_Ref0
         using ItemT = DynamicArray<JsonObject*>*;
         using RefT = DynamicArray<JsonObject*>&;
         int Depth;
+        DynamicArray<JsonType> Types;
         DynamicArray<ItemT> Stack;
 
         void Init(ItemT Root)
         {
+            Types.Add(JsonType_Object);
             Stack.Add(Root);
             Depth = 0;
         }
-        void Push(ItemT Item) { Stack.Add(Item); Depth++; }
-        void Pop() { Stack.RemoveLast(); Depth--; }
+        void Push(JsonType Type, ItemT Item) { Types.Add(Type); Stack.Add(Item); Depth++; }
+        void Pop() { if (Depth > 0) { Types.RemoveLast(); Stack.RemoveLast(); Depth--; } }
         RefT Top() { return *Stack[Depth]; }
+        JsonType TopType() { return Types[Depth]; }
         int GetDepth() { return Depth; }
         bool Root() { return Depth == 0; };
     };
 
+}
+
+namespace Haversine_Ref0_JsonHelpers
+{
+    /*
+    using Haversine_Ref0::JsonType;
+    using Haversine_Ref0::JsonValue;
+    */
+    using namespace Haversine_Ref0;
+
+    bool CharIsNumeric(char C)
+    {
+        return ('0' <= C && C <= '9');
+    }
+    bool CharIsAlpha(char C)
+    {
+        return ('a' <= C && C <= 'z') ||
+            ('A' <= C && C <= 'Z');
+   }
+    bool CharIsAlphanumeric(char C)
+    {
+        return CharIsAlpha(C) ||
+            CharIsNumeric(C);
+    }
+    bool CharIsWhiteSpace(char C)
+    {
+        return C == ' ' ||
+            C == '\n' ||
+            C == '\r' ||
+            C == '\t';
+    }
+    bool CharIsBeginNumber(char C)
+    {
+        return CharIsNumeric(C) ||
+                C == '+' ||
+                C == '-';
+    }
+    bool TryMatchLiteral(char* Begin, const char* Literal)
+    {
+        bool bMatch = true;
+        int ReadIdx = 0;
+        while (bMatch)
+        {
+            if (0 == Literal[ReadIdx]) { break; } // Match!
+            else if (0 == Begin[ReadIdx]) { bMatch = false; }
+            else if (Literal[ReadIdx] != Begin[ReadIdx]) { bMatch = false; }
+            ReadIdx++;
+        }
+        return bMatch;
+    }
+    bool TryReadNumber(char* Begin, char** End, JsonValue* ParsedNumber)
+    {
+        if (!Begin || !End || !ParsedNumber) { return false; }
+
+        JsonType NumberType = JsonType_NumberInt;
+        int ReadIdx = 0;
+        while (CharIsNumeric(Begin[ReadIdx]) || Begin[ReadIdx] == '.')
+        {
+            if (Begin[ReadIdx] == '.')
+            {
+                // Multiple .'s in literal -> report error
+                if (NumberType == JsonType_NumberFloat) { return false; }
+                else { NumberType = JsonType_NumberFloat; }
+            }
+            ReadIdx++;
+        }
+
+        ParsedNumber->Type = NumberType;
+        char* FirstCharAfterNumber = 0;
+        if (JsonType_NumberInt == NumberType)
+        {
+            ParsedNumber->NumberInt = strtol(Begin, &FirstCharAfterNumber, 10);
+        }
+        else if (JsonType_NumberFloat == NumberType)
+        {
+            ParsedNumber->NumberFloat = strtod(Begin, &FirstCharAfterNumber);
+        }
+        if (!FirstCharAfterNumber) { return false; }
+        *End = FirstCharAfterNumber;
+        return true;
+    }
+
+    bool TryReadString(char* Begin, char** End, char** ParsedString)
+    {
+        if (Begin[0] != '"' || !ParsedString) { return false; }
+        int ReadIdx = 1;
+        while (Begin[ReadIdx] != '"')
+        {
+            if (Begin[ReadIdx] == '\0') { return false; }
+            // TODO: Make this _way_ more robust
+            ReadIdx++;
+        }
+        if (ReadIdx > 1)
+        {
+            *ParsedString = new char[ReadIdx];
+            memcpy(*ParsedString, Begin + 1, ReadIdx - 1);
+            (*ParsedString)[ReadIdx-1] = '\0';
+        }
+        else
+        {
+            *ParsedString = nullptr;
+        }
+        if (End) { *End = Begin + ReadIdx; }
+        return true;
+    }
+    bool TryReadUntilValueBegin(char* Begin, char** End)
+    {
+        if (!End) { return false; }
+        int ReadIdx = 0;
+        while (true)
+        {
+            switch (Begin[ReadIdx])
+            {
+                case ':':
+                {
+                    *End = Begin + ReadIdx + 1;
+                    return true;
+                } break;
+                case '"':
+                case '\0':
+                {
+                    return false;
+                } break;
+            }
+            ReadIdx++;
+        }
+        return false;
+    }
+}
+
+namespace Haversine_Ref0
+{
+    using namespace Haversine_Ref0_JsonHelpers;
 #define DEF_LITERAL_VAL(lit_val) \
         static constexpr const char* Literal_##lit_val = #lit_val; \
         static constexpr const int Literal_##lit_val##_Length = sizeof(#lit_val)-1;
@@ -161,6 +213,7 @@ namespace Haversine_Ref0
             ParseState_Root,
             ParseState_Key,
             ParseState_Value,
+            ParseState_Array,
             ParseState_End,
             ParseState_Error
         };
@@ -181,6 +234,7 @@ namespace Haversine_Ref0
         int Parse_Root(char* JsonData, int StartIdx);
         int Parse_Key(char* JsonData, int StartIdx);
         int Parse_Value(char* JsonData, int StartIdx);
+        int Parse_Array(char* JsonData, int StartIdx);
         int Advance(char* JsonData, int StartIdx);
     };
 }
@@ -205,7 +259,8 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartI
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartIdx)
 {
     int ReadIdx = StartIdx;
-    while (State == ParseState_Key)
+    bool bThisKey = true;
+    while (State == ParseState_Key && bThisKey)
     {
         switch (JsonData[ReadIdx])
         {
@@ -221,7 +276,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
                     if (TryReadUntilValueBegin(JsonData + ReadIdx, &CharAfterColon))
                     {
                         State = ParseState_Value;
-                        ReadIdx = CharAfterColon - JsonData;
+                        ReadIdx = CharAfterColon - JsonData - 1;
                     }
                     else
                     {
@@ -241,10 +296,11 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartId
                 }
                 else
                 {
-                    // NOTE: I don't think we should be in here,
-                    //      We're expecting to read a key, and if we hit exit that means
-                    //      Parse_Value hit a bug / is handling something wrong
-                    State = ParseState_Error;
+                    Stack.Pop();
+                    if (Stack.TopType() == JsonType_Array)
+                    {
+                        State = ParseState_Array;
+                    }
                 }
             } break;
             case '\0':
@@ -321,17 +377,24 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             case '{': // Type is Object
             {
                 Stack.Top().Last()->Value.Type = JsonType_Object;
-                DynamicArray<JsonObject*>* NewTop = new DynamicArray<JsonObject*>;
-                Stack.Top().Last()->Value.pObjects = NewTop; 
-                Stack.Push(NewTop);
+                DynamicArray<JsonObject*>* NewObjs = new DynamicArray<JsonObject*>;
+                Stack.Top().Last()->Value.pObjects = NewObjs; 
+                Stack.Push(JsonType_Object, NewObjs);
                 ReadIdx++;
                 State = ParseState_Key;
-                bDone = true;
             } break;
             case '[': // Type is Array
-            case ']':
             {
                 Stack.Top().Last()->Value.Type = JsonType_Array;
+                DynamicArray<JsonObject*>* NewArray = new DynamicArray<JsonObject*>;
+                Stack.Top().Last()->Value.pArray = NewArray; 
+                ReadIdx++;
+                Stack.Push(JsonType_Array, NewArray);
+                State = ParseState_Array;
+            } break;
+            case '}':
+            case ']':
+            {
                 State = ParseState_Error;
             } break;
             case ':':
@@ -341,50 +404,23 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
                 State = ParseState_Error;
             } break;
         }
-        if (CharIsNumeric(JsonData[ReadIdx]) ||
-                JsonData[ReadIdx] == '+' ||
-                JsonData[ReadIdx] == '-')
+        if (!bDone && State == ParseState_Value && CharIsBeginNumber(JsonData[ReadIdx]))
         {
-            // Default number type is int
-            Stack.Top().Last()->Value.Type = JsonType_NumberInt;
-            int BeginNumberIdx = ReadIdx++;
-            while (CharIsNumeric(JsonData[ReadIdx]) ||
-                    JsonData[ReadIdx] == '.')
+            char* CharAfterNumber = nullptr;
+            if (TryReadNumber(JsonData + ReadIdx, &CharAfterNumber, &Stack.Top().Last()->Value))
             {
-                if (JsonData[ReadIdx] == '.')
-                {
-                    if (JsonType_NumberFloat == Stack.Top().Last()->Value.Type)
-                    {
-                        // Multiple .'s in literal -> report error
-                        State = ParseState_Error;
-                        return ReadIdx;
-                    }
-                    else
-                    {
-                        Stack.Top().Last()->Value.Type = JsonType_NumberFloat;
-                    }
-                }
-                ReadIdx++;
-            }
-            char* FirstCharAfterNumber = 0;
-            if (JsonType_NumberInt == Stack.Top().Last()->Value.Type)
-            {
-                Stack.Top().Last()->Value.NumberInt = strtol(JsonData + BeginNumberIdx, &FirstCharAfterNumber, 10);
-            }
-            else if (JsonType_NumberFloat == Stack.Top().Last()->Value.Type)
-            {
-                char* EndFloatReadIdx = 0;
-                Stack.Top().Last()->Value.NumberFloat = strtod(JsonData + BeginNumberIdx, &FirstCharAfterNumber);
-            }
-            if (FirstCharAfterNumber)
-            {
-                ReadIdx = FirstCharAfterNumber - JsonData;
+                ReadIdx = CharAfterNumber - JsonData;
+                bDone = true;
             }
             else
             {
                 State = ParseState_Error;
             }
-            bDone = true;
+            break;
+        }
+        else if (!bDone && State == ParseState_Value)
+        {
+            ReadIdx++;
         }
     }
     // If we haven't hit an error, try to read chars until the next key begin (or root end)
@@ -396,10 +432,24 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             {
                 State = ParseState_Key;
             } break;
-            case '}': // End of root
+            case '}': // End of object
             {
                 if (Stack.Root()) { State = ParseState_End; }
-                else { Stack.Pop(); }
+                else
+                {
+                    Stack.Pop();
+                    if (Stack.TopType() == JsonType_Array)
+                    {
+                        State = ParseState_Array;
+                    }
+                    else if (Stack.TopType() == JsonType_Object)
+                    {
+                    }
+                    else
+                    {
+                        State = ParseState_Error;
+                    }
+                }
             } break;
             case '\0': // End of file
             {
@@ -407,6 +457,139 @@ int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int Start
             } break;
         }
         ReadIdx++;
+    }
+    return ReadIdx;
+}
+
+int Haversine_Ref0::ParseJsonStateMachine::Parse_Array(char* JsonData, int StartIdx)
+{
+    DynamicArray<JsonObject*>* pArray = &Stack.Top();
+    // TODO: Make this more robust, try to verify that Stack.Top() was an ArrayType
+    if (!pArray) { State = ParseState_Error; }
+    int ReadIdx = StartIdx;
+    bool bStartArray = true;
+    bool bExpectCommaOrEnd = true;
+    while (State == ParseState_Array && bStartArray)
+    {
+        switch (JsonData[ReadIdx])
+        {
+            case ',':
+            {
+                if (!bExpectCommaOrEnd)
+                {
+                    State = ParseState_Error;
+                }
+                bExpectCommaOrEnd = false;
+            } break;
+            case 'n': // Type is null
+            {
+                pArray->Add(new JsonObject{});
+                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(null)))
+                {
+                    ReadIdx += LITERAL_VAL_LENGTH(null);
+                }
+                else { State = ParseState_Error; }
+                bExpectCommaOrEnd = true;
+            } break;
+            case 't': // Type is bool (true)
+            {
+                pArray->Add(new JsonObject{});
+                pArray->Last()->Value.Type = JsonType_Bool;
+                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(true)))
+                {
+                    ReadIdx += LITERAL_VAL_LENGTH(true);
+                    Stack.Top().Last()->Value.Type = JsonType_Bool;
+                    Stack.Top().Last()->Value.Bool = true;
+                }
+                else { State = ParseState_Error; }
+                bExpectCommaOrEnd = true;
+            } break;
+            case 'f': // Type is bool (false)
+            {
+                pArray->Add(new JsonObject{});
+                pArray->Last()->Value.Type = JsonType_Bool;
+                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(false)))
+                {
+                    ReadIdx += LITERAL_VAL_LENGTH(false);
+                    Stack.Top().Last()->Value.Type = JsonType_Bool;
+                    Stack.Top().Last()->Value.Bool = false;
+                }
+                else { State = ParseState_Error; }
+                bExpectCommaOrEnd = true;
+            } break;
+            case '"': // Type is string
+            {
+                pArray->Add(new JsonObject{});
+                pArray->Last()->Value.Type = JsonType_String;
+                char* RightQuote = nullptr;
+                if (TryReadString(JsonData + ReadIdx, &RightQuote, &Stack.Top().Last()->Value.String))
+                {
+                    ReadIdx = RightQuote - JsonData;
+                }
+                else { State = ParseState_Error; }
+                bExpectCommaOrEnd = true;
+            } break;
+            case '{': // Type is Object
+            {
+                pArray->Add(new JsonObject{});
+                pArray->Last()->Value.Type = JsonType_Object;
+                DynamicArray<JsonObject*>* NewObjs = new DynamicArray<JsonObject*>;
+                pArray->Last()->Value.pObjects = NewObjs;
+                ReadIdx++;
+                Stack.Push(JsonType_Object, NewObjs);
+                State = ParseState_Key;
+            } break;
+            case '[': // Type is Array
+            {
+                pArray->Add(new JsonObject{});
+                pArray->Last()->Value.Type = JsonType_Array;
+                DynamicArray<JsonObject*>* NewArray = new DynamicArray<JsonObject*>;
+                pArray->Last()->Value.pArray = NewArray;
+                Stack.Push(JsonType_Array, NewArray);
+                State = ParseState_Array;
+                bStartArray = false;
+            } break;
+            case ']':
+            {
+                // TODO: Add in check that comma wasn't read before this without a value,
+                // But for now, just accept this as the end of the array
+                if (Stack.Root()) { State = ParseState_Error; }
+                else
+                {
+                    Stack.Pop();
+                    if (Stack.TopType() == JsonType_Object)
+                    {
+                        State = ParseState_Key;
+                    }
+                    else if (Stack.TopType() == JsonType_Array)
+                    {
+                    }
+                    bStartArray = false;
+                    ReadIdx++;
+                }
+            } break;
+            case '}':
+            {
+                State = ParseState_Error;
+            } break;
+        }
+        if (CharIsBeginNumber(JsonData[ReadIdx]))
+        {
+            pArray->Add(new JsonObject{});
+            char* CharAfterNumber = nullptr;
+            if (TryReadNumber(JsonData + ReadIdx, &CharAfterNumber, &
+            pArray->Last()->Value))
+            {
+                ReadIdx = CharAfterNumber - JsonData - 1;
+            }
+            else { State = ParseState_Error; }
+            bExpectCommaOrEnd = true;
+        }
+
+        if (State == ParseState_Array)
+        {
+            ReadIdx++;
+        }
     }
     return ReadIdx;
 }
@@ -425,6 +608,10 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
         {
             ReadIdx = Parse_Key(JsonData, ReadIdx);
         } break;
+        case ParseState_Array:
+        {
+            ReadIdx = Parse_Array(JsonData, ReadIdx);
+        } break;
         case ParseState_Value:
         {
             ReadIdx = Parse_Value(JsonData, ReadIdx);
@@ -439,8 +626,8 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
             ReadIdx++;
         } break;
     }
-    constexpr bool bDebugPrint = true;
-    if (bDebugPrint)
+    constexpr bool bDebugTracePrint = false;
+    if (bDebugTracePrint)
     {
         auto GetStateName = [](StateType InState) -> const char*
         {
@@ -449,6 +636,7 @@ int Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int StartIdx)
                 case ParseState_Root: return "Root";
                 case ParseState_Key: return "Key";
                 case ParseState_Value: return "Value";
+                case ParseState_Array: return "Array";
                 case ParseState_End: return "End";
                 case ParseState_Error: return "Error";
                 default: return "";

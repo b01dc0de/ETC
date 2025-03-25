@@ -1,0 +1,11 @@
+{
+    "key0": [1, 2],
+    "key1" :[
+        { "nest-key0": { } },
+        { "nest-key1": [ 3, 4, 56.0 ] },
+        { "nest-key2": [ "", "aosijfe", "aoweigfao"] },
+        "str-val0",
+        1,
+        23,
+        "str-val1" ]
+}
