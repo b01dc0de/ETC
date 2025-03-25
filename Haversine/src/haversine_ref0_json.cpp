@@ -175,13 +175,23 @@ namespace Haversine_Ref0_JsonHelpers
 
         JsonType NumberType = JsonType_NumberInt;
         int ReadIdx = 0;
-        while (CharIsNumeric(Begin[ReadIdx]) || Begin[ReadIdx] == '.')
+        bool bReadPeriod = false;
+        bool bReadSign = false;
+        while (CharIsNumeric(Begin[ReadIdx]) ||
+                Begin[ReadIdx] == '.' ||
+                Begin[ReadIdx] == '-')
         {
             if (Begin[ReadIdx] == '.')
             {
-                // Multiple .'s in literal -> report error
-                if (NumberType == JsonType_NumberFloat) { return false; }
-                else { NumberType = JsonType_NumberFloat; }
+                // Multiple periods in literal => Error
+                if (bReadPeriod) { return false; }
+                else { bReadPeriod = true; NumberType = JsonType_NumberFloat; }
+            }
+            else if (Begin[ReadIdx] == '-')
+            {
+                // Multiple signs or sign after period => Error
+                if (bReadSign || bReadPeriod) { return false; }
+                else { bReadSign = true; }
             }
             ReadIdx++;
         }
@@ -201,27 +211,33 @@ namespace Haversine_Ref0_JsonHelpers
         return true;
     }
 
-    bool TryReadString(char* Begin, char** End, char** ParsedString)
+    bool TryReadString(char* Begin, char** CharAfterCloseQuote, char** ParsedString)
     {
-        if (Begin[0] != '"' || !ParsedString) { return false; }
+        if (Begin[0] != '"' || !CharAfterCloseQuote || !ParsedString) { return false; }
         int ReadIdx = 1;
-        while (Begin[ReadIdx] != '"')
+        int NumReadChars = 0;
+        while (NumReadChars = IsValidStringValue(Begin+ReadIdx))
         {
-            if (Begin[ReadIdx] == '\0') { return false; }
-            // TODO: Make this _way_ more robust
-            ReadIdx++;
+            ReadIdx += NumReadChars;
         }
         if (ReadIdx > 1)
         {
-            *ParsedString = new char[ReadIdx];
-            memcpy(*ParsedString, Begin + 1, ReadIdx - 1);
-            (*ParsedString)[ReadIdx-1] = '\0';
+            if (Begin[ReadIdx] == '"')
+            {
+                *ParsedString = new char[ReadIdx];
+                memcpy(*ParsedString, Begin + 1, ReadIdx - 1);
+                (*ParsedString)[ReadIdx-1] = '\0';
+            }
+            else
+            {
+                return false;
+            }
         }
         else
         {
             *ParsedString = nullptr;
         }
-        if (End) { *End = Begin + ReadIdx; }
+        if (CharAfterCloseQuote) { *CharAfterCloseQuote = Begin + ReadIdx + 1; }
         return true;
     }
     bool TryReadUntilValueBegin(char* Begin, char** End)
@@ -262,7 +278,7 @@ namespace Haversine_Ref0
     DEF_LITERAL_VAL(true);
     DEF_LITERAL_VAL(false);
 
-    JsonToken ParseNextToken(char* Begin, char** NextTokenBegin);
+    JsonToken ParseNextToken(char* Begin, JsonValue* OutValue, char** NextTokenBegin);
 
     struct ParseJsonStateMachine
     {
@@ -297,9 +313,9 @@ namespace Haversine_Ref0
     };
 }
 
-Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, char** NextTokenBegin)
+Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, JsonValue* OutValue, char** NextTokenBegin)
 {
-    if (!Begin || !NextTokenBegin) { return Token_Error; }
+    if (!Begin || !OutValue || !NextTokenBegin) { return Token_Error; }
     JsonToken Result = Token_Error;
     int ReadIdx = 0;
     while (Begin[ReadIdx])
@@ -321,15 +337,20 @@ Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, char** Nex
             {
                 if (TryMatchLiteral(Begin + ReadIdx, LITERAL_VAL(false)))
                 {
+                    OutValue->Type = JsonType_Bool;
+                    OutValue->Bool = false;
                     *NextTokenBegin = Begin + ReadIdx + LITERAL_VAL_LENGTH(false);
                     return Token_False;
                 }
                 else { return Token_Error; }
+
             } break;
             case 't':
             {
                 if (TryMatchLiteral(Begin + ReadIdx, LITERAL_VAL(true)))
                 {
+                    OutValue->Type = JsonType_Bool;
+                    OutValue->Bool = true;
                     *NextTokenBegin = Begin + ReadIdx + LITERAL_VAL_LENGTH(true);
                     return Token_True;
                 }
@@ -339,6 +360,7 @@ Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, char** Nex
             {
                 if (TryMatchLiteral(Begin + ReadIdx, LITERAL_VAL(null)))
                 {
+                    OutValue->Type = JsonType_Null;
                     *NextTokenBegin = Begin + ReadIdx + LITERAL_VAL_LENGTH(null);
                     return Token_Null;
                 }
@@ -346,28 +368,23 @@ Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, char** Nex
             } break;
             case '"':
             {
-                ReadIdx++;
-                int NumReadChars = 0;
-                while (NumReadChars = IsValidStringValue(Begin + ReadIdx))
+                char* CharAfterStringEnd = nullptr;
+                if (TryReadString(Begin + ReadIdx, &CharAfterStringEnd, &OutValue->String))  
                 {
-                    ReadIdx += NumReadChars;
-                }
-                if (Begin[ReadIdx] == '"') 
-                {
-                    *NextTokenBegin = Begin + ReadIdx + 1; return Token_String;
+                    OutValue->Type = JsonType_String;
+                    *NextTokenBegin = CharAfterStringEnd;
+                    return Token_String;
                 }
                 else
                 {
-                    // Not valid string
-                    return Token_Error;
+                    return Token_Error; // Not valid string
                 }
             } break;
         }
         if (CharIsBeginNumber(Begin[ReadIdx]))
         {
             char* CharAfterNumberEnd = nullptr;
-            JsonValue DummyValue{};
-            if (TryReadNumber(Begin + ReadIdx, &CharAfterNumberEnd, &DummyValue))
+            if (TryReadNumber(Begin + ReadIdx, &CharAfterNumberEnd, OutValue))
             {
                 *NextTokenBegin = CharAfterNumberEnd;
                 return Token_Number;
@@ -408,7 +425,8 @@ void Haversine_Ref0::TraceTokens(char* JsonData, int DataLength)
     while (ReadIdx < DataLength)
     {
         char* NextTokenBegin = 0;
-        JsonToken CurrToken = ParseNextToken(JsonData + ReadIdx, &NextTokenBegin);
+        JsonValue ParsedValue = {};
+        JsonToken CurrToken = ParseNextToken(JsonData + ReadIdx, &ParsedValue, &NextTokenBegin);
         if (CurrToken == Token_Error)
         {
             fprintf(stdout, "[json][token] ERROR encountered at Idx %d!\n", ReadIdx);
@@ -416,8 +434,13 @@ void Haversine_Ref0::TraceTokens(char* JsonData, int DataLength)
         }
         else
         {
-            fprintf(stdout, "[json][token] Read next token: %s\n\tBeginIdx: %d\tEndIdx:%d\n",
-                    GetPrintableTokenName(CurrToken), ReadIdx, NextTokenBegin ? (int)(NextTokenBegin - JsonData) : 0);
+            fprintf(stdout, "[json][token] Read next token: %s", GetPrintableTokenName(CurrToken));
+            if (CurrToken == Token_String) { fprintf(stdout, ": \"%s\"\n", ParsedValue.String); }
+            else if (CurrToken == Token_Number && ParsedValue.Type == JsonType_NumberInt) { fprintf(stdout, ": %lld\n", ParsedValue.NumberInt); }
+            else if (CurrToken == Token_Number && ParsedValue.Type == JsonType_NumberFloat) { fprintf(stdout, ": %f\n", ParsedValue.NumberFloat); }
+            else { fprintf(stdout, "\n"); }
+            fprintf(stdout, "\n\tBeginIdx: %d\tEndIdx:%d\n",
+                    ReadIdx, NextTokenBegin ? (int)(NextTokenBegin - JsonData) : 0);
             ReadIdx = NextTokenBegin - JsonData;
         }
     }
