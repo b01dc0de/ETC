@@ -7,6 +7,7 @@
 namespace Haversine_Ref0
 {
     HList ParseJSON(FileContentsT& InputFile);
+    void TraceTokens(char* JsonData, int DataLength);
 }
 
 #endif // HAVERSINE_REF0_JSON_H

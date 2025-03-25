@@ -31,6 +31,23 @@ namespace Haversine_Ref0
         };
     };
 
+    enum JsonToken
+    {
+        Token_LeftBracket,
+        Token_RightBracket,
+        Token_LeftBrace,
+        Token_RightBrace,
+        Token_Colon,
+        Token_Comma,
+        Token_String,
+        Token_Number,
+        Token_Null,
+        Token_True,
+        Token_False,
+        Token_Error,
+        Token_End
+    };
+
     struct JsonObject
     {
         char* Key;
@@ -62,7 +79,6 @@ namespace Haversine_Ref0
         int GetDepth() { return Depth; }
         bool Root() { return Depth == 0; };
     };
-
 }
 
 namespace Haversine_Ref0_JsonHelpers
@@ -99,6 +115,46 @@ namespace Haversine_Ref0_JsonHelpers
         return CharIsNumeric(C) ||
                 C == '+' ||
                 C == '-';
+    }
+    bool CharIsHexDigit(char C)
+    {
+        return CharIsNumeric(C) ||
+            ('A' <= C && C <= 'F') ||
+            ('a' <= C && C <= 'f');
+    }
+    int IsValidStringValue(char *C)
+    {
+        if (C[0] == '"') { return 0; }
+        if (C[0] == '\\')
+        {
+            switch (C[1])
+            {
+                case '"':
+                case '\\':
+                case '/':
+                case 'b':
+                case 'f':
+                case 'n':
+                case 'r':
+                case 't':
+                {
+                    return 2;
+                } break;
+                case 'u':
+                {
+                    if (CharIsHexDigit(C[2]) &&
+                        CharIsHexDigit(C[3]) &&
+                        CharIsHexDigit(C[4]) &&
+                        CharIsHexDigit(C[5]))
+                    {
+                        return 6;
+                    }
+                } break;
+            }
+            return 0;
+        }
+        // TODO: Need to exempt control characters here
+        return 1;
     }
     bool TryMatchLiteral(char* Begin, const char* Literal)
     {
@@ -202,12 +258,14 @@ namespace Haversine_Ref0
 #define LITERAL_VAL(lit_val) (Literal_##lit_val)
 #define LITERAL_VAL_LENGTH(lit_val) (Literal_##lit_val##_Length)
 
+    DEF_LITERAL_VAL(null);
+    DEF_LITERAL_VAL(true);
+    DEF_LITERAL_VAL(false);
+
+    JsonToken ParseNextToken(char* Begin, char** NextTokenBegin);
+
     struct ParseJsonStateMachine
     {
-        DEF_LITERAL_VAL(null);
-        DEF_LITERAL_VAL(true);
-        DEF_LITERAL_VAL(false);
-
         enum StateType
         {
             ParseState_Root,
@@ -237,6 +295,132 @@ namespace Haversine_Ref0
         int Parse_Array(char* JsonData, int StartIdx);
         bool Advance(char* JsonData, int* Idx);
     };
+}
+
+Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, char** NextTokenBegin)
+{
+    if (!Begin || !NextTokenBegin) { return Token_Error; }
+    JsonToken Result = Token_Error;
+    int ReadIdx = 0;
+    while (Begin[ReadIdx])
+    {
+        if (CharIsWhiteSpace(Begin[ReadIdx]))
+        {
+            ReadIdx++;
+            continue;
+        }
+        switch (Begin[ReadIdx])
+        {
+            case '{': *NextTokenBegin = Begin + ReadIdx + 1; return Token_LeftBracket;
+            case '}': *NextTokenBegin = Begin + ReadIdx + 1; return Token_RightBracket;
+            case '[': *NextTokenBegin = Begin + ReadIdx + 1; return Token_LeftBrace;
+            case ']': *NextTokenBegin = Begin + ReadIdx + 1; return Token_RightBrace;
+            case ':': *NextTokenBegin = Begin + ReadIdx + 1; return Token_Colon;
+            case ',': *NextTokenBegin = Begin + ReadIdx + 1; return Token_Comma;
+            case 'f':
+            {
+                if (TryMatchLiteral(Begin + ReadIdx, LITERAL_VAL(false)))
+                {
+                    *NextTokenBegin = Begin + ReadIdx + LITERAL_VAL_LENGTH(false);
+                    return Token_False;
+                }
+                else { return Token_Error; }
+            } break;
+            case 't':
+            {
+                if (TryMatchLiteral(Begin + ReadIdx, LITERAL_VAL(true)))
+                {
+                    *NextTokenBegin = Begin + ReadIdx + LITERAL_VAL_LENGTH(true);
+                    return Token_True;
+                }
+                else { return Token_Error; }
+            } break;
+            case 'n':
+            {
+                if (TryMatchLiteral(Begin + ReadIdx, LITERAL_VAL(null)))
+                {
+                    *NextTokenBegin = Begin + ReadIdx + LITERAL_VAL_LENGTH(null);
+                    return Token_Null;
+                }
+                else { return Token_Error; }
+            } break;
+            case '"':
+            {
+                ReadIdx++;
+                int NumReadChars = 0;
+                while (NumReadChars = IsValidStringValue(Begin + ReadIdx))
+                {
+                    ReadIdx += NumReadChars;
+                }
+                if (Begin[ReadIdx] == '"') 
+                {
+                    *NextTokenBegin = Begin + ReadIdx + 1; return Token_String;
+                }
+                else
+                {
+                    // Not valid string
+                    return Token_Error;
+                }
+            } break;
+        }
+        if (CharIsBeginNumber(Begin[ReadIdx]))
+        {
+            char* CharAfterNumberEnd = nullptr;
+            JsonValue DummyValue{};
+            if (TryReadNumber(Begin + ReadIdx, &CharAfterNumberEnd, &DummyValue))
+            {
+                *NextTokenBegin = CharAfterNumberEnd;
+                return Token_Number;
+            }
+            else
+            {
+                return Token_Error;
+            }
+        }
+    }
+    if (Begin[ReadIdx] == '\0') { *NextTokenBegin = nullptr; return Token_End; }
+    return Result;
+}
+
+void Haversine_Ref0::TraceTokens(char* JsonData, int DataLength)
+{
+    auto GetPrintableTokenName = [](JsonToken InToken) -> const char*
+    {
+        switch (InToken)
+        {
+            case Token_LeftBracket: return "LeftBracket";
+            case Token_RightBracket: return "RightBracket";
+            case Token_LeftBrace: return "LeftBrace";
+            case Token_RightBrace: return "RightBrace";
+            case Token_Colon: return "Colon";
+            case Token_Comma: return "Comma";
+            case Token_String: return "String";
+            case Token_Number: return "Number";
+            case Token_Null: return "Null";
+            case Token_True: return "True";
+            case Token_False: return "False";
+            case Token_Error: return "Error";
+            case Token_End: return "End";
+        }
+        return "";
+    };
+    int ReadIdx = 0;
+    while (ReadIdx < DataLength)
+    {
+        char* NextTokenBegin = 0;
+        JsonToken CurrToken = ParseNextToken(JsonData + ReadIdx, &NextTokenBegin);
+        if (CurrToken == Token_Error)
+        {
+            fprintf(stdout, "[json][token] ERROR encountered at Idx %d!\n", ReadIdx);
+            break;
+        }
+        else
+        {
+            fprintf(stdout, "[json][token] Read next token: %s\n\tBeginIdx: %d\tEndIdx:%d\n",
+                    GetPrintableTokenName(CurrToken), ReadIdx, NextTokenBegin ? (int)(NextTokenBegin - JsonData) : 0);
+            ReadIdx = NextTokenBegin - JsonData;
+        }
+    }
 }
 
 int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartIdx)
@@ -704,6 +888,12 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
 {
     HList Result = {};
     if (nullptr == InputFile.Data) { return Result; }
+
+#define ENABLE_TRACE_DEBUG() (1)
+#if ENABLE_TRACE_DEBUG()
+    TraceTokens((char*)InputFile.Data, InputFile.Size);
+    return Result;
+#endif // ENABLE_TRACE_DEBUG()
 
     JsonRoot Root = {};
     ParseJsonStateMachine StateMachine = {};
