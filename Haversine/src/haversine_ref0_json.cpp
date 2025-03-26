@@ -535,7 +535,11 @@ Haversine_Ref0::JsonObject Haversine_Ref0::Parse(char* JsonData, int Size)
         }
         bAfterComma = CurrToken == Token_Comma;
         bAfterColon = CurrToken == Token_Colon;
-        DebugPrintStep(JsonData, CurrToken, OutValue, BeginIdx, ReadIdx);
+        constexpr bool bDebugPrint = false;
+        if (bDebugPrint)
+        {
+            DebugPrintStep(JsonData, CurrToken, OutValue, BeginIdx, ReadIdx);
+        }
     }
     return Root;
 }

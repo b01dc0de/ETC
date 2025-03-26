@@ -18,18 +18,26 @@
 
 int main(int ArgCount, const char* ArgValues[])
 {
-#define ENABLE_JSON_TEST() (1)
-#if ENABLE_JSON_TEST()
-    (void)Haversine_Ref0::ReadFileAsJSON("output_count10000_seed156208_clusters8.json");
-    return 0;
-#endif // ENABLE_JSON_TEST()
-
     constexpr int DefaultCount = 10000;
     constexpr int DefaultSeed = 156208;
     constexpr int DefaultClusterCount = 8;
 
     constexpr int BufferSize = 64;
-    if (ArgCount == 2 && strcmp(ArgValues[1], "default") == 0)
+    if (ArgCount == 2 && strcmp(ArgValues[1], "defaultall") == 0)
+    {
+        char JSONFileName[BufferSize];
+        HList PairList = Haversine_Ref0::GenerateDataClustered(DefaultCount, DefaultSeed, DefaultClusterCount);
+        (void)sprintf_s(JSONFileName, "output_count%d_seed%d_clusters%d.json",
+                DefaultCount, DefaultSeed, DefaultClusterCount);
+        Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
+        fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
+
+        HList ParsedPairs = Haversine_Ref0::ReadFileAsJSON(JSONFileName);
+        fprintf(stdout, "Calculating Haversine Average on parsed JSON file (%s) list of size %d:\n", JSONFileName, ParsedPairs.Count);
+        f64 HvAvg = Haversine_Ref0::CalculateAverage(ParsedPairs);
+        fprintf(stdout, "\tAverage: %f\n", HvAvg);
+    }
+    else if (ArgCount == 2 && strcmp(ArgValues[1], "default") == 0)
     {
         char JSONFileName[BufferSize];
         char BinaryFileName[BufferSize];

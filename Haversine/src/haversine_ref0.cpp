@@ -121,7 +121,11 @@ HList Haversine_Ref0::GenerateDataClustered(int PairCount, int Seed, int Cluster
 
     fprintf(stdout, "Generated Pair data - Clustered - Count: %d, Seed: %d\n",
             PairCount, Seed);
-    PrintData(Result);
+    constexpr bool bPrintGeneratedData = false;
+    if (bPrintGeneratedData)
+    {
+        PrintData(Result);
+    }
 
     double Average = CalculateAverage(Result);
     printf("Average: %f\n", Average);
