@@ -13,7 +13,6 @@
 
 /*
  *  TODO:
- *      - [ ] Support random generation through clusters
  *      - [ ] Parse generated haversine input JSON
  */
 

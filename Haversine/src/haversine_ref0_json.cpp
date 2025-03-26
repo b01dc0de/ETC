@@ -26,17 +26,16 @@ namespace Haversine_Ref0
             f64 NumberFloat;
             b64 Bool;
             char* String;
-            DynamicArray<JsonObject*>* pObjects;
-            DynamicArray<JsonObject*>* pArray;
+            DynamicArray<JsonObject*>* List;
         };
     };
 
     enum JsonToken
     {
-        Token_LeftBracket,
-        Token_RightBracket,
-        Token_LeftBrace,
-        Token_RightBrace,
+        Token_LeftCurly,
+        Token_RightCurly,
+        Token_LeftSquare,
+        Token_RightSquare,
         Token_Colon,
         Token_Comma,
         Token_String,
@@ -60,22 +59,22 @@ namespace Haversine_Ref0
     };
     struct JsonTreeStack
     {
-        using ItemT = DynamicArray<JsonObject*>*;
-        using RefT = DynamicArray<JsonObject*>&;
         int Depth;
-        DynamicArray<JsonType> Types;
+        using ItemT = JsonObject*;
+        using RefT = JsonObject&;
+        using ListT = DynamicArray<JsonObject*>*;
         DynamicArray<ItemT> Stack;
 
         void Init(ItemT Root)
         {
-            Types.Add(JsonType_Object);
             Stack.Add(Root);
             Depth = 0;
         }
-        void Push(JsonType Type, ItemT Item) { Types.Add(Type); Stack.Add(Item); Depth++; }
-        void Pop() { if (Depth > 0) { Types.RemoveLast(); Stack.RemoveLast(); Depth--; } }
+        void Push(ItemT Item) { Stack.Add(Item); Depth++; }
+        void Pop() { if (Depth > 0) { Stack.RemoveLast(); Depth--; } }
         RefT Top() { return *Stack[Depth]; }
-        JsonType TopType() { return Types[Depth]; }
+        ListT TopList() { return Top().Value.List; }
+        JsonType TopType() { return Top().Value.Type; }
         int GetDepth() { return Depth; }
         bool Root() { return Depth == 0; };
     };
@@ -280,37 +279,9 @@ namespace Haversine_Ref0
 
     JsonToken ParseNextToken(char* Begin, JsonValue* OutValue, char** NextTokenBegin);
 
-    struct ParseJsonStateMachine
-    {
-        enum StateType
-        {
-            ParseState_Root,
-            ParseState_Key,
-            ParseState_Value,
-            ParseState_Array,
-            ParseState_End,
-            ParseState_Error
-        };
-
-        StateType State;
-        int Depth;
-        JsonRoot* Root;
-        JsonTreeStack Stack;
-
-        void Init(JsonRoot* InRoot)
-        {
-            State = ParseState_Root;
-            Depth = 0;
-            Root = InRoot;
-            Stack.Init(&InRoot->Objects);
-        }
-        bool Error() { return State == ParseState_Error; }
-        int Parse_Root(char* JsonData, int StartIdx);
-        int Parse_Key(char* JsonData, int StartIdx);
-        int Parse_Value(char* JsonData, int StartIdx);
-        int Parse_Array(char* JsonData, int StartIdx);
-        bool Advance(char* JsonData, int* Idx);
-    };
+    JsonObject Parse(char* JsonData, int Size);
+    const char* GetPrintableTokenName(JsonToken InToken);
+    void PrintTokenStep(char* JsonData, Haversine_Ref0::JsonToken InToken, Haversine_Ref0::JsonValue InValue, int BeginIdx, int EndIdx);
 }
 
 Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, JsonValue* OutValue, char** NextTokenBegin)
@@ -327,10 +298,10 @@ Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, JsonValue*
         }
         switch (Begin[ReadIdx])
         {
-            case '{': *NextTokenBegin = Begin + ReadIdx + 1; return Token_LeftBracket;
-            case '}': *NextTokenBegin = Begin + ReadIdx + 1; return Token_RightBracket;
-            case '[': *NextTokenBegin = Begin + ReadIdx + 1; return Token_LeftBrace;
-            case ']': *NextTokenBegin = Begin + ReadIdx + 1; return Token_RightBrace;
+            case '{': *NextTokenBegin = Begin + ReadIdx + 1; return Token_LeftCurly;
+            case '}': *NextTokenBegin = Begin + ReadIdx + 1; return Token_RightCurly;
+            case '[': *NextTokenBegin = Begin + ReadIdx + 1; return Token_LeftSquare;
+            case ']': *NextTokenBegin = Begin + ReadIdx + 1; return Token_RightSquare;
             case ':': *NextTokenBegin = Begin + ReadIdx + 1; return Token_Colon;
             case ',': *NextTokenBegin = Begin + ReadIdx + 1; return Token_Comma;
             case 'f':
@@ -399,512 +370,248 @@ Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, JsonValue*
     return Result;
 }
 
+const char* Haversine_Ref0::GetPrintableTokenName(JsonToken InToken)
+{
+    switch (InToken)
+    {
+        case Token_LeftCurly: return "LeftBracket";
+        case Token_RightCurly: return "RightBracket";
+        case Token_LeftSquare: return "LeftBrace";
+        case Token_RightSquare: return "RightBrace";
+        case Token_Colon: return "Colon";
+        case Token_Comma: return "Comma";
+        case Token_String: return "String";
+        case Token_Number: return "Number";
+        case Token_Null: return "Null";
+        case Token_True: return "True";
+        case Token_False: return "False";
+        case Token_Error: return "Error";
+        case Token_End: return "End";
+    }
+    return "";
+}
+
+void Haversine_Ref0::PrintTokenStep(char* JsonData, Haversine_Ref0::JsonToken InToken, Haversine_Ref0::JsonValue InValue, int BeginIdx, int EndIdx)
+{
+    static constexpr const char* TokenNamesTable[] = 
+    {
+        "LeftCurly", "RightCurly",
+        "LeftBrace", "RightBrace",
+        "Colon", "Comma",
+        "String", "Number",
+        "Null", "True", "False",
+        "Error",
+        "End"
+    };
+
+    if (InToken == Token_Error)
+    {
+        fprintf(stdout, "[json][token] ERROR encountered at Idx %d!\n", BeginIdx);
+    }
+    else
+    {
+        fprintf(stdout, "[json][token] Read next token: %s", TokenNamesTable[InToken]);
+        if (InToken == Token_String) { fprintf(stdout, ": \"%s\"\n", InValue.String); }
+        else if (InToken == Token_Number && InValue.Type == JsonType_NumberInt) { fprintf(stdout, ": %lld\n", InValue.NumberInt); }
+        else if (InToken == Token_Number && InValue.Type == JsonType_NumberFloat) { fprintf(stdout, ": %f\n", InValue.NumberFloat); }
+        else { fprintf(stdout, "\n"); }
+        fprintf(stdout, "\n\tBeginIdx: %d\tEndIdx:%d\n", BeginIdx, EndIdx);
+    }
+}
+
 void Haversine_Ref0::TraceTokens(char* JsonData, int DataLength)
 {
-    auto GetPrintableTokenName = [](JsonToken InToken) -> const char*
-    {
-        switch (InToken)
-        {
-            case Token_LeftBracket: return "LeftBracket";
-            case Token_RightBracket: return "RightBracket";
-            case Token_LeftBrace: return "LeftBrace";
-            case Token_RightBrace: return "RightBrace";
-            case Token_Colon: return "Colon";
-            case Token_Comma: return "Comma";
-            case Token_String: return "String";
-            case Token_Number: return "Number";
-            case Token_Null: return "Null";
-            case Token_True: return "True";
-            case Token_False: return "False";
-            case Token_Error: return "Error";
-            case Token_End: return "End";
-        }
-        return "";
-    };
     int ReadIdx = 0;
     while (ReadIdx < DataLength)
     {
+        int BeginIdx = ReadIdx;
         char* NextTokenBegin = 0;
         JsonValue ParsedValue = {};
         JsonToken CurrToken = ParseNextToken(JsonData + ReadIdx, &ParsedValue, &NextTokenBegin);
-        if (CurrToken == Token_Error)
+
+        PrintTokenStep(JsonData, CurrToken, ParsedValue, BeginIdx, NextTokenBegin ? NextTokenBegin - JsonData : 0);
+        if (CurrToken != Token_Error)
         {
-            fprintf(stdout, "[json][token] ERROR encountered at Idx %d!\n", ReadIdx);
-            break;
-        }
-        else
-        {
-            fprintf(stdout, "[json][token] Read next token: %s", GetPrintableTokenName(CurrToken));
-            if (CurrToken == Token_String) { fprintf(stdout, ": \"%s\"\n", ParsedValue.String); }
-            else if (CurrToken == Token_Number && ParsedValue.Type == JsonType_NumberInt) { fprintf(stdout, ": %lld\n", ParsedValue.NumberInt); }
-            else if (CurrToken == Token_Number && ParsedValue.Type == JsonType_NumberFloat) { fprintf(stdout, ": %f\n", ParsedValue.NumberFloat); }
-            else { fprintf(stdout, "\n"); }
-            fprintf(stdout, "\n\tBeginIdx: %d\tEndIdx:%d\n",
-                    ReadIdx, NextTokenBegin ? (int)(NextTokenBegin - JsonData) : 0);
             ReadIdx = NextTokenBegin - JsonData;
         }
     }
 }
 
-int Haversine_Ref0::ParseJsonStateMachine::Parse_Root(char* JsonData, int StartIdx)
+Haversine_Ref0::JsonObject Haversine_Ref0::Parse(char* JsonData, int Size)
 {
-    int ReadIdx = StartIdx;
-    while (State == ParseState_Root)
-    {
-        switch (JsonData[ReadIdx])
-        {
-            case '{': { State = ParseState_Key; } break;
-            case '}': { State = ParseState_End; } break;
-            case '\0': { State = ParseState_Error; } break;
-            default: { } break;
-        }
-        ReadIdx++;
-    }
-    return ReadIdx;
-}
 
-int Haversine_Ref0::ParseJsonStateMachine::Parse_Key(char* JsonData, int StartIdx)
-{
-    int ReadIdx = StartIdx;
-    bool bStartKey = true;
-    while (State == ParseState_Key && bStartKey)
-    {
-        switch (JsonData[ReadIdx])
-        {
-            case '"':
-            {
-                Stack.Top().Add(new JsonObject);
-                char* RightQuote = nullptr;
-                if (TryReadString(JsonData + ReadIdx, &RightQuote, &Stack.Top().Last()->Key))
-                {
-                    ReadIdx = RightQuote - JsonData + 1;
+    JsonObject Root = {};
+    Root.Value.Type = JsonType_Object;
+    Root.Value.List = new DynamicArray<JsonObject*>;
 
-                    char* CharAfterColon = nullptr;
-                    if (TryReadUntilValueBegin(JsonData + ReadIdx, &CharAfterColon))
-                    {
-                        State = ParseState_Value;
-                        ReadIdx = CharAfterColon - JsonData - 1;
-                    }
-                    else
-                    {
-                        State = ParseState_Error;
-                    }
-                }
-                else
-                {
-                    State = ParseState_Error;
-                }
-            } break;
-            case '}':
-            {
-                if (Stack.Root())
-                {
-                    State = ParseState_End;
-                }
-                else
-                {
-                    Stack.Pop();
-                    if (Stack.TopType() == JsonType_Array)
-                    {
-                        State = ParseState_Array;
-                    }
-                }
-                ReadIdx++;
-                bStartKey = false;
-                return ReadIdx;
-            } break;
-            case '\0':
-            {
-                State = ParseState_Error;
-            } break;
-        }
-        if (State == ParseState_Key) { ReadIdx++; }
-    }
-    bool bAdvToNextSigChar = true;
-    while (bAdvToNextSigChar)
-    {
-        switch (JsonData[ReadIdx])
-        {
-            // Valid
-            case ':':
-            {
-                bAdvToNextSigChar = false;
-                ReadIdx++;
-            } break;
-            case '"':
-            case ',':
-            case '[':
-            case '{':
-            {
-                bAdvToNextSigChar = false;
-            } break;
-            case '}':
-            case ']':
-            case '\0':
-            {
-                State = ParseState_Error;
-                bAdvToNextSigChar = false;
-            } break;
-        }
-        if (bAdvToNextSigChar) { ReadIdx++; }
-    }
-    return ReadIdx;
-}
+    JsonTreeStack Stack;
+    bool bStackInit = false;
 
-int Haversine_Ref0::ParseJsonStateMachine::Parse_Value(char* JsonData, int StartIdx)
-{
-    /*
-    // TODO: Commented this out due to false positives triggering when we did read a key, but it was null (""), how should this be handled/marked?
-    if (nullptr == Stack.Top().Last()->Key)
-    {
-        // If we haven't read a key yet, then this indicates a bug in Parse_Key
-        State = ParseState_Error;
-        return StartIdx;
-    }
-    */
+    bool bEnd = false;
+    bool bError = false;
+    int ReadIdx = 0;
 
-    int ReadIdx = StartIdx;
-    bool bDone = false;
-    while (!bDone && State == ParseState_Value)
+    bool bAfterComma = false;
+    bool bAfterColon = false;
+    while (!bError && !bEnd && ReadIdx < Size)
     {
-        // Try to parse value type
-        switch (JsonData[ReadIdx])
+        int BeginIdx = ReadIdx;
+        if (bStackInit && (Stack.TopType() != JsonType_Object) &&
+                (Stack.TopType() != JsonType_Array))
         {
-            case 'n': // Type is null
-            {
-                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(null)))
-                {
-                    ReadIdx += LITERAL_VAL_LENGTH(null);
-                    bDone = true;
-                }
-                else { State = ParseState_Error; }
-            } break;
-            case 't': // Type is bool (true)
-            {
-                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(true)))
-                {
-                    ReadIdx += LITERAL_VAL_LENGTH(true);
-                    Stack.Top().Last()->Value.Type = JsonType_Bool;
-                    Stack.Top().Last()->Value.Bool = true;
-                    bDone = true;
-                }
-                else { State = ParseState_Error; }
-            } break;
-            case 'f': // Type is bool (false)
-            {
-                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(false)))
-                {
-                    ReadIdx += LITERAL_VAL_LENGTH(false);
-                    Stack.Top().Last()->Value.Type = JsonType_Bool;
-                    Stack.Top().Last()->Value.Bool = false;
-                    bDone = true;
-                }
-                else { State = ParseState_Error; }
-            } break;
-            case '"': // Type is string
-            {
-                Stack.Top().Last()->Value.Type = JsonType_String;
-                char* RightQuote = nullptr;
-                if (TryReadString(JsonData + ReadIdx, &RightQuote, &Stack.Top().Last()->Value.String))
-                {
-                    ReadIdx = RightQuote - JsonData + 1;
-                    bDone = true;
-                }
-                else
-                {
-                    State = ParseState_Error;
-                }
-            } break;
-            case '{': // Type is Object
-            {
-                Stack.Top().Last()->Value.Type = JsonType_Object;
-                DynamicArray<JsonObject*>* NewObjs = new DynamicArray<JsonObject*>;
-                Stack.Top().Last()->Value.pObjects = NewObjs; 
-                Stack.Push(JsonType_Object, NewObjs);
-                ReadIdx++;
-                State = ParseState_Key;
-            } break;
-            case '[': // Type is Array
-            {
-                Stack.Top().Last()->Value.Type = JsonType_Array;
-                DynamicArray<JsonObject*>* NewArray = new DynamicArray<JsonObject*>;
-                Stack.Top().Last()->Value.pArray = NewArray; 
-                ReadIdx++;
-                Stack.Push(JsonType_Array, NewArray);
-                State = ParseState_Array;
-            } break;
-            case '}':
-            case ']':
-            {
-                State = ParseState_Error;
-            } break;
-            case ':':
-            case ',':
-            case '\0':
-            {
-                State = ParseState_Error;
-            } break;
-        }
-        if (!bDone && State == ParseState_Value && CharIsBeginNumber(JsonData[ReadIdx]))
-        {
-            char* CharAfterNumber = nullptr;
-            if (TryReadNumber(JsonData + ReadIdx, &CharAfterNumber, &Stack.Top().Last()->Value))
-            {
-                ReadIdx = CharAfterNumber - JsonData;
-                bDone = true;
-            }
-            else
-            {
-                State = ParseState_Error;
-            }
+            bError = true;
             break;
         }
-        else if (!bDone && State == ParseState_Value)
+        char* NextTokenBegin = nullptr;
+        JsonValue OutValue = {};
+        JsonToken CurrToken = ParseNextToken(JsonData + ReadIdx, &OutValue, &NextTokenBegin);
+        switch (CurrToken)
         {
-            ReadIdx++;
-        }
-    }
-    // If we haven't hit an error, try to read chars until the next key begin (or root end)
-    while (State == ParseState_Value)
-    {
-        switch (JsonData[ReadIdx])
-        {
-            case ',': // There is another object
+            case Token_LeftCurly:
             {
-                State = ParseState_Key;
-            } break;
-            case '}': // End of object
-            {
-                if (Stack.Root()) { State = ParseState_End; }
-                else
+                if (!bStackInit) { Stack.Init(&Root); bStackInit = true; }
+                else if (Stack.TopType() == JsonType_Object && bAfterColon)
                 {
-                    Stack.Pop();
-                    if (Stack.TopType() == JsonType_Array)
+                    DynamicArray<JsonObject*>* NewList = new DynamicArray<JsonObject*>;
+                    auto LastVal = Stack.TopList()->Last();
+                    Stack.TopList()->Last()->Value.Type = JsonType_Object;
+                    Stack.TopList()->Last()->Value.List = NewList;
+                    Stack.Push(Stack.TopList()->Last());
+                }
+                else if (Stack.TopType() == JsonType_Array && 
+                        (bAfterComma || Stack.TopList()->Num == 0))
+                {
+                    Stack.TopList()->Add(new JsonObject);
+                    Stack.TopList()->Last()->Key = nullptr;
+                    Stack.TopList()->Last()->Value.Type = JsonType_Object;
+                    DynamicArray<JsonObject*>* NewList = new DynamicArray<JsonObject*>;
+                    Stack.TopList()->Last()->Value.List = NewList;
+                    Stack.Push(Stack.TopList()->Last());
+                }
+                else { bError = true; }
+            } break;
+            case Token_RightCurly:
+            {
+                if (Stack.TopType() == JsonType_Object)
+                {
+                    if (Stack.Root()) { bEnd = true; }
+                    else { Stack.Pop(); }
+                }
+                else { bError = true; }
+            } break;
+            case Token_LeftSquare:
+            {
+                if (Stack.TopType() == JsonType_Object && bAfterColon)
+                {
+                    DynamicArray<JsonObject*>* NewList = new DynamicArray<JsonObject*>;
+                    Stack.TopList()->Last()->Value.Type = JsonType_Array;
+                    Stack.TopList()->Last()->Value.List = NewList;
+                    Stack.Push(Stack.TopList()->Last());
+                }
+                else if (Stack.TopType() == JsonType_Array && 
+                        (bAfterComma || Stack.TopList()->Num == 0))
+                {
+                    DynamicArray<JsonObject*>* NewList = new DynamicArray<JsonObject*>;
+                    Stack.TopList()->Add(new JsonObject);
+                    Stack.TopList()->Last()->Value.Type = JsonType_Array;
+                    Stack.TopList()->Last()->Value.List = NewList;
+                    Stack.Push(Stack.TopList()->Last());
+                }
+                else { bError = true; }
+            } break;
+            case Token_RightSquare:
+            {
+                if (Stack.TopType() == JsonType_Array) { Stack.Pop(); }
+                else { bError = true; }
+            } break;
+            case Token_Colon:
+            case Token_Comma: { if (bAfterColon || bAfterComma) { bError = true; } } break;
+            case Token_String:
+            case Token_Number:
+            case Token_Null:
+            case Token_True:
+            case Token_False:
+            {
+                bool bKey = false;
+                JsonObject* ObjToSetValue = nullptr;
+                if (Stack.TopType() == JsonType_Array)
+                {
+                    if (Stack.TopList()->Num == 0 || bAfterComma)
                     {
-                        State = ParseState_Array;
+                        ObjToSetValue = *Stack.TopList()->Add_RetPtr(new JsonObject);
                     }
-                    else if (Stack.TopType() == JsonType_Object)
+                    else { bError = true; }
+                }
+                else if (Stack.TopType() == JsonType_Object)
+                {
+                    if (bAfterColon)
                     {
+                        ObjToSetValue = Stack.TopList()->Last();
                     }
-                    else
+                    else if ((CurrToken == Token_String &&
+                            OutValue.Type == JsonType_String) &&
+                            (Stack.TopList()->Num == 0 || bAfterComma))
                     {
-                        State = ParseState_Error;
+                        JsonObject* NewObj_Key = *Stack.TopList()->Add_RetPtr(new JsonObject);
+                        NewObj_Key->Key = OutValue.String;
+                        bKey = true;
                     }
+                    else { bError = true; }
                 }
-            } break;
-            case '\0': // End of file
-            {
-                State = ParseState_Error;
-            } break;
-        }
-        ReadIdx++;
-    }
-    return ReadIdx;
-}
-
-int Haversine_Ref0::ParseJsonStateMachine::Parse_Array(char* JsonData, int StartIdx)
-{
-    DynamicArray<JsonObject*>* pArray = &Stack.Top();
-    if (!pArray) { State = ParseState_Error; }
-    int ReadIdx = StartIdx;
-    bool bStartArray = true;
-    bool bExpectCommaOrEnd = true;
-    while (State == ParseState_Array && bStartArray)
-    {
-        switch (JsonData[ReadIdx])
-        {
-            case ',':
-            {
-                if (!bExpectCommaOrEnd)
+                if (ObjToSetValue)
                 {
-                    State = ParseState_Error;
-                }
-                bExpectCommaOrEnd = false;
-            } break;
-            case 'n': // Type is null
-            {
-                pArray->Add(new JsonObject{});
-                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(null)))
-                {
-                    ReadIdx += LITERAL_VAL_LENGTH(null);
-                }
-                else { State = ParseState_Error; }
-                bExpectCommaOrEnd = true;
-            } break;
-            case 't': // Type is bool (true)
-            {
-                pArray->Add(new JsonObject{});
-                pArray->Last()->Value.Type = JsonType_Bool;
-                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(true)))
-                {
-                    ReadIdx += LITERAL_VAL_LENGTH(true);
-                    Stack.Top().Last()->Value.Type = JsonType_Bool;
-                    Stack.Top().Last()->Value.Bool = true;
-                }
-                else { State = ParseState_Error; }
-                bExpectCommaOrEnd = true;
-            } break;
-            case 'f': // Type is bool (false)
-            {
-                pArray->Add(new JsonObject{});
-                pArray->Last()->Value.Type = JsonType_Bool;
-                if (TryMatchLiteral(JsonData + ReadIdx, LITERAL_VAL(false)))
-                {
-                    ReadIdx += LITERAL_VAL_LENGTH(false);
-                    Stack.Top().Last()->Value.Type = JsonType_Bool;
-                    Stack.Top().Last()->Value.Bool = false;
-                }
-                else { State = ParseState_Error; }
-                bExpectCommaOrEnd = true;
-            } break;
-            case '"': // Type is string
-            {
-                pArray->Add(new JsonObject{});
-                pArray->Last()->Value.Type = JsonType_String;
-                char* RightQuote = nullptr;
-                if (TryReadString(JsonData + ReadIdx, &RightQuote, &Stack.Top().Last()->Value.String))
-                {
-                    ReadIdx = RightQuote - JsonData;
-                }
-                else { State = ParseState_Error; }
-                bExpectCommaOrEnd = true;
-            } break;
-            case '{': // Type is Object
-            {
-                pArray->Add(new JsonObject{});
-                pArray->Last()->Value.Type = JsonType_Object;
-                DynamicArray<JsonObject*>* NewObjs = new DynamicArray<JsonObject*>;
-                pArray->Last()->Value.pObjects = NewObjs;
-                ReadIdx++;
-                Stack.Push(JsonType_Object, NewObjs);
-                State = ParseState_Key;
-            } break;
-            case '[': // Type is Array
-            {
-                pArray->Add(new JsonObject{});
-                pArray->Last()->Value.Type = JsonType_Array;
-                DynamicArray<JsonObject*>* NewArray = new DynamicArray<JsonObject*>;
-                pArray->Last()->Value.pArray = NewArray;
-                ReadIdx++;
-                Stack.Push(JsonType_Array, NewArray);
-                State = ParseState_Array;
-                bStartArray = false;
-            } break;
-            case ']':
-            {
-                // TODO: Add in check that comma wasn't read before this without a value,
-                // But for now, just accept this as the end of the array
-                if (Stack.Root()) { State = ParseState_Error; }
-                else
-                {
-                    Stack.Pop();
-                    if (Stack.TopType() == JsonType_Object)
+                    switch (CurrToken)
                     {
-                        State = ParseState_Key;
+                        case Token_String:
+                        {
+                            ObjToSetValue->Value.Type = JsonType_String;
+                            ObjToSetValue->Value.String = OutValue.String;
+                        } break;
+                        case Token_Number:
+                        {
+                            if (OutValue.Type == JsonType_NumberInt)
+                            {
+                                ObjToSetValue->Value.Type = JsonType_NumberInt;
+                                ObjToSetValue->Value.NumberInt = OutValue.NumberInt;
+                            }
+                            else if (OutValue.Type == JsonType_NumberFloat)
+                            {
+                                ObjToSetValue->Value.Type = JsonType_NumberFloat;
+                                ObjToSetValue->Value.NumberFloat = OutValue.NumberFloat;
+                            }
+                            else { bError = true; }
+                        } break;
+                        case Token_Null:
+                        {
+                            ObjToSetValue->Value.Type = JsonType_Null;
+                        } break;
+                        case Token_True:
+                        {
+                            ObjToSetValue->Value.Type = JsonType_Bool;
+                            ObjToSetValue->Value.Bool = true;
+                        } break;
+                        case Token_False:
+                        {
+                            ObjToSetValue->Value.Type = JsonType_Bool;
+                            ObjToSetValue->Value.Bool = false;
+                        } break;
+                        default: { bError = true; } break;
                     }
-                    else if (Stack.TopType() == JsonType_Array)
-                    {
-                    }
-                    bStartArray = false;
-                    ReadIdx++;
                 }
+                if (!bKey && !ObjToSetValue) { bError = true; }
             } break;
-            case '}':
-            {
-                State = ParseState_Error;
-            } break;
+            case Token_Error: { bError = true; } break;
+            case Token_End: { bEnd = true; } break;
         }
-        if (CharIsBeginNumber(JsonData[ReadIdx]))
+        if (!(CurrToken == Token_Error || CurrToken == Token_End) && NextTokenBegin)
         {
-            pArray->Add(new JsonObject{});
-            char* CharAfterNumber = nullptr;
-            if (TryReadNumber(JsonData + ReadIdx, &CharAfterNumber, &
-            pArray->Last()->Value))
-            {
-                ReadIdx = CharAfterNumber - JsonData - 1;
-            }
-            else { State = ParseState_Error; }
-            bExpectCommaOrEnd = true;
+            ReadIdx = NextTokenBegin - JsonData;
         }
-
-        if (State == ParseState_Array && bStartArray)
-        {
-            ReadIdx++;
-        }
+        bAfterComma = CurrToken == Token_Comma;
+        bAfterColon = CurrToken == Token_Colon;
+        PrintTokenStep(JsonData, CurrToken, OutValue, BeginIdx, ReadIdx);
     }
-    return ReadIdx;
-}
-
-bool Haversine_Ref0::ParseJsonStateMachine::Advance(char* JsonData, int* Idx)
-{
-    StateType BeginState = State;
-    int BeginIdx = *Idx;
-    int ReadIdx = *Idx;
-    switch (State)
-    {
-        case ParseState_Root:
-        {
-            ReadIdx = Parse_Root(JsonData, ReadIdx);
-        } break;
-        case ParseState_Key:
-        {
-            ReadIdx = Parse_Key(JsonData, ReadIdx);
-        } break;
-        case ParseState_Array:
-        {
-            ReadIdx = Parse_Array(JsonData, ReadIdx);
-        } break;
-        case ParseState_Value:
-        {
-            ReadIdx = Parse_Value(JsonData, ReadIdx);
-        } break;
-        case ParseState_End:
-        {
-            // TODO: Error handling(?)
-            /*
-             * while (JsonData[ReadIdx] != '\0') { ReadIdx++; }
-             */
-
-        } break;
-    }
-    constexpr bool bDebugTracePrint = true;
-    if (bDebugTracePrint)
-    {
-        auto GetStateName = [](StateType InState) -> const char*
-        {
-            switch (InState)
-            {
-                case ParseState_Root: return "Root";
-                case ParseState_Key: return "Key";
-                case ParseState_Value: return "Value";
-                case ParseState_Array: return "Array";
-                case ParseState_End: return "End";
-                case ParseState_Error: return "Error";
-                default: return "";
-            }
-        };
-        auto GetPrintableChar = [](char C) -> char
-        {
-            switch (C)
-            {
-                case '\n':
-                case '\t':
-                case '\r':
-                    return '\\';
-                default:
-                    return C;
-            }
-        };
-
-        fprintf(stdout, "[json][debug] Advance:\n");
-        fprintf(stdout, "\t\tBeginState: %s, BeginIdx: %d '%c' (0x%x)\n",
-                GetStateName(BeginState), BeginIdx, GetPrintableChar(JsonData[BeginIdx]), JsonData[BeginIdx]);
-        fprintf(stdout, "\t\tEndState: %s, EndIdx: %d '%c' (0x%x)\n\n",
-                GetStateName(State), ReadIdx, GetPrintableChar(JsonData[ReadIdx]), JsonData[ReadIdx]);
-        fprintf(stdout, "\t\tJSON Parsed:%.*s\n\n", ReadIdx - BeginIdx, JsonData + BeginIdx);
-    }
-    *Idx = ReadIdx;
-    return (State != ParseState_End && State != ParseState_Error);
+    return Root;
 }
 
 HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
@@ -912,32 +619,9 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
     HList Result = {};
     if (nullptr == InputFile.Data) { return Result; }
 
-#define ENABLE_TRACE_DEBUG() (1)
-#if ENABLE_TRACE_DEBUG()
-    TraceTokens((char*)InputFile.Data, InputFile.Size);
-    return Result;
-#endif // ENABLE_TRACE_DEBUG()
-
-    JsonRoot Root = {};
-    ParseJsonStateMachine StateMachine = {};
-    StateMachine.Init(&Root);
-
-    char* pRead = (char*)InputFile.Data;
-    int ReadIdx = 0;
-    while (ReadIdx < InputFile.Size &&
-            StateMachine.Advance(pRead, &ReadIdx))
-    {
-    }
-
-    if (StateMachine.Error())
-    {
-        fprintf(stdout, "[json]: Error while parsing!\n");
-    }
-    else
-    {
-        fprintf(stdout, "[json]: Parse success! no errors :)\n");
-    }
-
+    fprintf(stdout, "PARSE BEGIN:\n");
+    JsonObject Root = Haversine_Ref0::Parse((char*)InputFile.Data, InputFile.Size);
+    fprintf(stdout, "PARSE END\n");
     return Result;
 }
 
