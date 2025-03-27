@@ -26,8 +26,8 @@ namespace Haversine_Ref0
 
     f64 CalculateHaversine(HPair Pair);
     f64 CalculateAverage(HList List);
-    HList GenerateDataUniform(int PairCount, int Seed);
-    HList GenerateDataClustered(int PairCount, int Seed, int ClusterCount);
+    HList GenerateDataUniform(int Seed, int Count);
+    HList GenerateDataClustered(int Seed, int Count);
     void PrintData(HList List);
     void WriteDataAsBinary(HList List, const char* FileName);
     void WriteDataAsJSON(HList List, const char* FileName);

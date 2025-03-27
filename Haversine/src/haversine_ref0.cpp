@@ -2,8 +2,10 @@
 
 constexpr double CoordXMin = -180.0;
 constexpr double CoordXMax = +180.0;
-constexpr double CoordYMin = -90.0;
-constexpr double CoordYMax = +90.0;
+//constexpr double CoordYMin = -90.0;
+//constexpr double CoordYMax = +90.0;
+constexpr double CoordYMin = CoordXMin;
+constexpr double CoordYMax = CoordXMax;
 constexpr double DegreesPerRadian = 0.01745329251994329577;
 constexpr double EarthRadius = 6372.8;
 
@@ -45,47 +47,64 @@ namespace Haversine_Ref0_Helpers
         return Result;
     }
 
-    u64 GetOSTimer();
-    u64 GetOSFreq();
-    u64 GetCPUTimer();
+#if _WIN32
+#include <intrin.h>
+#include <windows.h>
+    u64 GetOSTimer()
+    {
+        LARGE_INTEGER PerfCount;
+        QueryPerformanceCounter(&PerfCount);
+        return PerfCount.QuadPart;
+    }
+    u64 GetOSFreq()
+    {
+        LARGE_INTEGER Freq;
+        QueryPerformanceFrequency(&Freq);
+        return Freq.QuadPart;
+    }
+#else // NOT _WIN32
+#include <x86intrin.h>
+#include <sys/time.h>
+    // TODO: These are untested currently until I build/run these on non-Windows platforms!!
+    u64 GetOSTimer()
+    {
+        timeval tval;
+        gettimeofday(&tval, 0);
+        u64 Result = GetOSTimerFreq()*(u64)tval.tv_sex + (u64)tval.tv_usec;
+        return Result;
+    }
+    u64 GetOSFreq() { return 1000000u; }
+#endif // _WIN32
+    inline u64 GetCPUTimer()
+    {
+        return __rdtsc();
+    }
 
+    u64 EstimateCPUFreq()
+    {
+        u64 CPUStart = GetCPUTimer();
+        u64 OSFreq = GetOSFreq();
+        u64 OSBegin = GetOSTimer();
+        u64 OSEnd = 0;
+        u64 OSElapsed = 0;
+        while (OSElapsed < OSFreq)
+        {
+            OSEnd = GetOSTimer();
+            OSElapsed = OSEnd - OSBegin;
+        }
+
+        u64 CPUEnd = GetCPUTimer();
+        u64 CPUElapsed = GetCPUTimer();
+        if (OSElapsed)
+        {
+            return OSFreq * CPUElapsed / OSElapsed;
+        }
+        return 0;
+    }
     f64 GetElapsedTimeSeconds(u64 Delta, u64 Freq)
     {
         return (f64)Delta / (f64)Freq;
     }
-}
-
-#if _WIN32
-#include <intrin.h>
-#include <windows.h>
-u64 Haversine_Ref0_Helpers::GetOSTimer()
-{
-    LARGE_INTEGER PerfCount;
-    QueryPerformanceCounter(&PerfCount);
-    return PerfCount.QuadPart;
-}
-u64 Haversine_Ref0_Helpers::GetOSFreq()
-{
-    LARGE_INTEGER Freq;
-    QueryPerformanceFrequency(&Freq);
-    return Freq.QuadPart;
-}
-#else // NOT _WIN32
-#include <x86intrin.h>
-#include <sys/time.h>
-// TODO: These are untested currently until I build/run these on non-Windows platforms!!
-u64 Haversine_Ref0_Helpers::GetOSTimer()
-{
-    timeval tval;
-    gettimeofday(&tval, 0);
-    u64 Result = GetOSTimerFreq()*(u64)tval.tv_sex + (u64)tval.tv_usec;
-    return Result;
-}
-u64 Haversine_Ref0_Helpers::GetOSFreq() { return 1000000u; }
-#endif // _WIN32
-inline u64 Haversine_Ref0_Helpers::GetCPUTimer()
-{
-    return __rdtsc();
 }
 
 namespace Haversine_Ref0
@@ -95,6 +114,8 @@ namespace Haversine_Ref0
     using RandomEngineT = std::default_random_engine;
     using UniformRealDistT = std::uniform_real_distribution<double>;
     using UniformIntDistT = std::uniform_int_distribution<int>;
+
+    static constexpr int DefaultClusterCount = 8;
 }
 
 double Haversine_Ref0::CalculateHaversine(HPair Pair)
@@ -114,14 +135,14 @@ double Haversine_Ref0::CalculateAverage(HList List)
     return Average;
 }
 
-HList Haversine_Ref0::GenerateDataUniform(int PairCount, int Seed)
+HList Haversine_Ref0::GenerateDataUniform(int Seed, int Count)
 {
     RandomEngineT default_rand_engine(Seed);
     UniformRealDistT coordx_dist(CoordXMin, CoordXMax);
     UniformRealDistT coordy_dist(CoordYMin, CoordYMax);
 
-    HList Result = {PairCount, new HPair[PairCount]};
-    for (int PairIdx = 0; PairIdx < PairCount; PairIdx++)
+    HList Result = {Count, new HPair[Count]};
+    for (int PairIdx = 0; PairIdx < Count; PairIdx++)
     {
         Result.Data[PairIdx].X0 = coordx_dist(default_rand_engine);
         Result.Data[PairIdx].Y0 = coordy_dist(default_rand_engine);
@@ -130,7 +151,7 @@ HList Haversine_Ref0::GenerateDataUniform(int PairCount, int Seed)
     }
 
     fprintf(stdout, "Generated Pair data - Uniform - Count: %d, Seed: %d\n",
-            PairCount, Seed);
+            Count, Seed);
     PrintData(Result);
 
     double Average = CalculateAverage(Result);
@@ -139,14 +160,15 @@ HList Haversine_Ref0::GenerateDataUniform(int PairCount, int Seed)
     return Result;
 }
 
-HList Haversine_Ref0::GenerateDataClustered(int PairCount, int Seed, int ClusterCount)
+HList Haversine_Ref0::GenerateDataClustered(int Seed, int Count)
 {
+
     RandomEngineT default_rand_engine(Seed);
     UniformRealDistT coordx_dist(CoordXMin, CoordXMax);
     UniformRealDistT coordy_dist(CoordYMin, CoordYMax);
 
-    HPair* Clusters = new HPair[ClusterCount];
-    for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ClusterIdx++)
+    HPair* Clusters = new HPair[DefaultClusterCount];
+    for (int ClusterIdx = 0; ClusterIdx < DefaultClusterCount; ClusterIdx++)
     {
         Clusters[ClusterIdx].X0 = coordx_dist(default_rand_engine);
         Clusters[ClusterIdx].Y0 = coordy_dist(default_rand_engine);
@@ -154,15 +176,15 @@ HList Haversine_Ref0::GenerateDataClustered(int PairCount, int Seed, int Cluster
         Clusters[ClusterIdx].Y1 = coordy_dist(default_rand_engine);
     }
 
-    double MaxClusterXOffset = CoordXMax / (ClusterCount * 2);
-    double MaxClusterYOffset = CoordYMax / (ClusterCount * 2);
-    int MaxClusterIdx = ClusterCount - 1;
+    double MaxClusterXOffset = CoordXMax / (DefaultClusterCount * 2);
+    double MaxClusterYOffset = CoordYMax / (DefaultClusterCount * 2);
+    int MaxClusterIdx = DefaultClusterCount - 1;
     UniformIntDistT clusteridx_dist(0, MaxClusterIdx);
     UniformRealDistT clusteroffsetx_dist(-MaxClusterXOffset, +MaxClusterXOffset);
     UniformRealDistT clusteroffsety_dist(-MaxClusterYOffset, +MaxClusterYOffset);
 
-    HList Result = {PairCount, new HPair[PairCount]};
-    for (int PairIdx = 0; PairIdx < PairCount; PairIdx++)
+    HList Result = {Count, new HPair[Count]};
+    for (int PairIdx = 0; PairIdx < Count; PairIdx++)
     {
         int ClusterIdx = clusteridx_dist(default_rand_engine);
         Result.Data[PairIdx].X0 = Clusters[ClusterIdx].X0 + clusteroffsetx_dist(default_rand_engine);
@@ -172,7 +194,7 @@ HList Haversine_Ref0::GenerateDataClustered(int PairCount, int Seed, int Cluster
     }
 
     fprintf(stdout, "Generated Pair data - Clustered - Count: %d, Seed: %d\n",
-            PairCount, Seed);
+            Count, Seed);
     constexpr bool bPrintGeneratedData = false;
     if (bPrintGeneratedData)
     {
@@ -955,37 +977,38 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
     return Result;
 }
 
+void PrintDebugPerfTimeStep(u64 TimeEnd, u64 TimeBegin, f64 TotalSeconds, u64 Freq, const char* StepName)
+{
+    u64 Delta = TimeEnd - TimeBegin;
+    f64 TimeSeconds = (f64)Delta / (f64)Freq;
+    fprintf(stdout, "%s: Took %.06f seconds\t(%.02f %% overall)\n", StepName, TimeSeconds, TimeSeconds / TotalSeconds * 100.0f);
+};
+
 void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
 {
     using namespace Haversine_Ref0_Helpers;
 
     static constexpr int FileNameMaxSize = 64;
-    static constexpr int DefaultClusterCount = 8;
 
-    u64 OS_Freq = GetOSFreq();
-    u64 OS_Timer0 = GetOSTimer();
-    u64 CPU_Timer0 = GetCPUTimer();
+    u64 CPU_Timer0 = 0u, CPU_Timer1 = 0u,
+        CPU_Timer2 = 0u, CPU_Timer3 = 0u,
+        CPU_Timer4 = 0u, CPU_Timer5 = 0u,
+        CPU_Timer6 = 0u;
 
-    u64 Debug_OSFreq = GetOSFreq();
-    u64 Debug_CPUStart = GetCPUTimer();
-    u64 Debug_OSStart = GetOSTimer();
+    CPU_Timer0 = GetCPUTimer();
 
-    u64 OS_Timer1 = 0u, CPU_Timer1 = 0u,
-        OS_Timer2 = 0u, CPU_Timer2 = 0u,
-        OS_Timer3 = 0u, CPU_Timer3 = 0u,
-        OS_Timer4 = 0u, CPU_Timer4 = 0u,
-        OS_Timer5 = 0u, CPU_Timer5 = 0u,
-        OS_Timer6 = 0u, CPU_Timer6 = 0u;
+    //u64 Debug_OSFreq = GetOSFreq();
+    //u64 Debug_CPUStart = GetCPUTimer();
+    //u64 Debug_OSStart = GetOSTimer();
 
     char JSONFileName[FileNameMaxSize];
     HList PairList = {};
 
-    OS_Timer1 = GetOSTimer();
     CPU_Timer1 = GetCPUTimer();
 
     if (bClustered)
     {
-        PairList = Haversine_Ref0::GenerateDataClustered(Count, Count, DefaultClusterCount);
+        PairList = Haversine_Ref0::GenerateDataClustered(Count, Seed);
         (void)sprintf_s(JSONFileName, "output_seed%d_count%d_clusters%d.json",
                 Seed, Count, DefaultClusterCount);
     }
@@ -996,35 +1019,32 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
                 Seed, Count);
     }
 
-    OS_Timer2 = GetOSTimer();
     CPU_Timer2 = GetCPUTimer();
 
     Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
     fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
 
-    OS_Timer3 = GetOSTimer();
     CPU_Timer3 = GetCPUTimer();
 
     HList ParsedPairs = Haversine_Ref0::ReadFileAsJSON(JSONFileName);
     fprintf(stdout, "Calculating Haversine Average on parsed JSON file (%s) list of size %d:\n", JSONFileName, ParsedPairs.Count);
 
-    OS_Timer4 = GetOSTimer();
     CPU_Timer4 = GetCPUTimer();
 
     f64 HvAvg = Haversine_Ref0::CalculateAverage(ParsedPairs);
     fprintf(stdout, "\tAverage: %f\n", HvAvg);
 
-    OS_Timer5 = GetOSTimer();
     CPU_Timer5 = GetCPUTimer();
 
     delete[] PairList.Data;
     delete[] ParsedPairs.Data;
 
-    OS_Timer6 = GetOSTimer();
     CPU_Timer6 = GetCPUTimer();
 
+    u64 CPU_Freq = EstimateCPUFreq();
 
     // NOTE: Following block is imported from perfaware/part2/listing_0073
+    /*
     {
         u64 Debug_OSEnd = GetOSTimer();
         u64 Debug_OSElapsed = Debug_OSEnd - Debug_OSStart;
@@ -1039,24 +1059,20 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
         printf("[debug][ref] CPU Freq: %llu (guessed)\n\n", Debug_CPUFreq);
         printf("[debug][ref] CPU Seconds: %.4f (guessed)\n\n", (f64)Debug_CPUElapsed / (f64)Debug_CPUFreq);
     }
-
-    auto PrintDebugPerfTimeStep = [](u64 TimeEnd, u64 TimeBegin, f64 TotalSeconds, u64 Freq, const char* StepName)
-    {
-        u64 Delta = TimeEnd - TimeBegin;
-        f64 TimeSeconds = (f64)Delta / (f64)Freq;
-        fprintf(stdout, "%s: Took %.06f seconds\t(%.02f %% overall)\n", StepName, TimeSeconds, TimeSeconds / TotalSeconds * 100.0f);
-    };
+    */
 
     {
-        f64 TotalSeconds = (f64)(OS_Timer6 - OS_Timer0) / (f64)OS_Freq;
+        f64 TotalSeconds = (f64)(CPU_Timer6 - CPU_Timer0) / (f64)CPU_Freq;
 
-        PrintDebugPerfTimeStep(OS_Timer6, OS_Timer0, TotalSeconds, OS_Freq, "Total");
-        PrintDebugPerfTimeStep(OS_Timer1, OS_Timer0, TotalSeconds, OS_Freq, "Startup");
-        PrintDebugPerfTimeStep(OS_Timer2, OS_Timer1, TotalSeconds, OS_Freq, "Generation");
-        PrintDebugPerfTimeStep(OS_Timer3, OS_Timer2, TotalSeconds, OS_Freq, "Write JSON");
-        PrintDebugPerfTimeStep(OS_Timer4, OS_Timer3, TotalSeconds, OS_Freq, "Read JSON");
-        PrintDebugPerfTimeStep(OS_Timer5, OS_Timer4, TotalSeconds, OS_Freq, "Calculate Haversine Average");
-        PrintDebugPerfTimeStep(OS_Timer6, OS_Timer5, TotalSeconds, OS_Freq, "Cleanup");
+        fprintf(stdout, "Using CPU Timer:\n");
+        PrintDebugPerfTimeStep(CPU_Timer6, CPU_Timer0, TotalSeconds, CPU_Freq, "Total");
+        PrintDebugPerfTimeStep(CPU_Timer1, CPU_Timer0, TotalSeconds, CPU_Freq, "Startup");
+        PrintDebugPerfTimeStep(CPU_Timer2, CPU_Timer1, TotalSeconds, CPU_Freq, "Generation");
+        PrintDebugPerfTimeStep(CPU_Timer3, CPU_Timer2, TotalSeconds, CPU_Freq, "Write JSON");
+        PrintDebugPerfTimeStep(CPU_Timer4, CPU_Timer3, TotalSeconds, CPU_Freq, "Read JSON");
+        PrintDebugPerfTimeStep(CPU_Timer5, CPU_Timer4, TotalSeconds, CPU_Freq, "Calculate Haversine Average");
+        PrintDebugPerfTimeStep(CPU_Timer6, CPU_Timer5, TotalSeconds, CPU_Freq, "Cleanup");
+        fprintf(stdout, "\n\n");
     }
 
 }

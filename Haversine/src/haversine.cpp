@@ -22,7 +22,7 @@ int main(int ArgCount, const char* ArgValues[])
     constexpr int BufferSize = 64;
     if (ArgCount == 2 && strcmp(ArgValues[1], "defaultall") == 0)
     {
-        Haversine_Ref0::DemoPipeline(DefaultSeed, DefaultSeed, true);
+        Haversine_Ref0::DemoPipeline(DefaultSeed, DefaultCount, true);
     }
     /*
     else if (ArgCount == 2 && strcmp(ArgValues[1], "default") == 0)
@@ -50,10 +50,10 @@ int main(int ArgCount, const char* ArgValues[])
     }
     else
     {
-        int PairCount = strtol(ArgValues[1], nullptr, 10);
+        int Count = strtol(ArgValues[1], nullptr, 10);
         int Seed = strtol(ArgValues[2], nullptr, 10);
 
-        Haversine_Ref0::DemoPipeline(Seed, PairCount, true);
+        Haversine_Ref0::DemoPipeline(Seed, Count, true);
     }
 }
 
