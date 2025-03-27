@@ -966,6 +966,10 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
     u64 OS_Timer0 = GetOSTimer();
     u64 CPU_Timer0 = GetCPUTimer();
 
+    u64 Debug_OSFreq = GetOSFreq();
+    u64 Debug_CPUStart = GetCPUTimer();
+    u64 Debug_OSStart = GetOSTimer();
+
     u64 OS_Timer1 = 0u, CPU_Timer1 = 0u,
         OS_Timer2 = 0u, CPU_Timer2 = 0u,
         OS_Timer3 = 0u, CPU_Timer3 = 0u,
@@ -1019,44 +1023,41 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
     OS_Timer6 = GetOSTimer();
     CPU_Timer6 = GetCPUTimer();
 
-    u64 CPU_Freq = OS_Freq * CPU_Timer6 / OS_Timer6;
+
+    // NOTE: Following block is imported from perfaware/part2/listing_0073
+    {
+        u64 Debug_OSEnd = GetOSTimer();
+        u64 Debug_OSElapsed = Debug_OSEnd - Debug_OSStart;
+        u64 Debug_CPUEnd = GetCPUTimer();
+        u64 Debug_CPUElapsed = Debug_CPUEnd - Debug_CPUStart;
+        u64 Debug_CPUFreq = 0;
+        if (Debug_OSElapsed) { Debug_CPUFreq = Debug_OSFreq * Debug_CPUElapsed / Debug_OSElapsed; }
+
+        printf("[debug][ref] OS Timer: %llu -> %llu = %llu elapsed\n", Debug_OSStart, Debug_OSEnd, Debug_OSElapsed);
+        printf("[debug][ref] OS Seconds: %.4f\n", (f64)Debug_OSElapsed/(f64)Debug_OSFreq);
+        printf("[debug][ref] CPU Timer: %llu -> %llu = %llu elapsed\n", Debug_CPUStart, Debug_CPUEnd, Debug_CPUElapsed);
+        printf("[debug][ref] CPU Freq: %llu (guessed)\n\n", Debug_CPUFreq);
+        printf("[debug][ref] CPU Seconds: %.4f (guessed)\n\n", (f64)Debug_CPUElapsed / (f64)Debug_CPUFreq);
+    }
+
+    auto PrintDebugPerfTimeStep = [](u64 TimeEnd, u64 TimeBegin, f64 TotalSeconds, u64 Freq, const char* StepName)
+    {
+        u64 Delta = TimeEnd - TimeBegin;
+        f64 TimeSeconds = (f64)Delta / (f64)Freq;
+        fprintf(stdout, "%s: Took %.06f seconds\t(%.02f %% overall)\n", StepName, TimeSeconds, TimeSeconds / TotalSeconds * 100.0f);
+    };
 
     {
-        f64 Total_OS = GetElapsedTimeSeconds(OS_Timer6 - OS_Timer0, OS_Freq);
-        f64 Total_CPU = GetElapsedTimeSeconds(CPU_Timer6 - CPU_Timer0, CPU_Freq);
+        f64 TotalSeconds = (f64)(OS_Timer6 - OS_Timer0) / (f64)OS_Freq;
 
-        f64 Startup_OS = GetElapsedTimeSeconds(OS_Timer1 - OS_Timer0, OS_Freq);
-        f64 Startup_CPU = GetElapsedTimeSeconds(CPU_Timer1 - CPU_Timer0, CPU_Freq);
-        f64 Startup_Percent = (Startup_OS / Total_OS) * 100.0f;
-
-        f64 Gen_OS = GetElapsedTimeSeconds(OS_Timer2 - OS_Timer1, OS_Freq);
-        f64 Gen_CPU = GetElapsedTimeSeconds(CPU_Timer2 - CPU_Timer1, CPU_Freq);
-        f64 Gen_Percent = (Gen_OS / Total_OS) * 100.0f;
-
-        f64 WriteJSON_OS = GetElapsedTimeSeconds(OS_Timer3 - OS_Timer2, OS_Freq);
-        f64 WriteJSON_CPU = GetElapsedTimeSeconds(CPU_Timer3 - CPU_Timer2, CPU_Freq);
-        f64 WriteJSON_Percent = (WriteJSON_OS / Total_OS) * 100.0f;
-
-        f64 ReadJSON_OS = GetElapsedTimeSeconds(OS_Timer4 - OS_Timer3, OS_Freq);
-        f64 ReadJSON_CPU = GetElapsedTimeSeconds(CPU_Timer4 - CPU_Timer3, CPU_Freq);
-        f64 ReadJSON_Percent = (ReadJSON_OS / Total_OS) * 100.0f;
-
-        f64 CalcAvg_OS = GetElapsedTimeSeconds(OS_Timer5 - OS_Timer4, OS_Freq);
-        f64 CalcAvg_CPU = GetElapsedTimeSeconds(CPU_Timer5 - CPU_Timer4, CPU_Freq);
-        f64 CalcAvg_Percent = (CalcAvg_OS / Total_OS) * 100.0f;
-
-        f64 Cleanup_OS = GetElapsedTimeSeconds(OS_Timer6 - OS_Timer5, OS_Freq);
-        f64 Cleanup_CPU = GetElapsedTimeSeconds(CPU_Timer6 - CPU_Timer5, CPU_Freq);
-        f64 Cleanup_Percent = (Cleanup_OS / Total_OS) * 100.0f;
-
-        fprintf(stdout, "Demo Time:\n\tOSFreq: %llu\tCPUFreq\n", OS_Freq, CPU_Freq);
-        fprintf(stdout, "\tTotal: OS: %.06f CPU: %.06f\n", Total_OS, Total_CPU);
-        fprintf(stdout, "\tStartup (%.02f%%): OS: %.06f CPU: %.06f\n", Startup_Percent, Startup_OS, Startup_CPU);
-        fprintf(stdout, "\tGeneration (%.02f%%): OS: %.06f CPU: %.06f\n", Gen_Percent, Gen_OS, Gen_CPU);
-        fprintf(stdout, "\tWrite JSON Data (%.02f%%): OS: %.06f CPU: %.06f\n", WriteJSON_Percent, WriteJSON_OS, WriteJSON_CPU);
-        fprintf(stdout, "\tRead JSON Data (%.02f%%): OS: %.06f CPU: %.06f\n", ReadJSON_Percent, ReadJSON_OS, ReadJSON_CPU);
-        fprintf(stdout, "\tCalculate Average (%.02f%%): OS: %.06f CPU: %.06f\n", CalcAvg_Percent, CalcAvg_OS, CalcAvg_CPU);
-        fprintf(stdout, "\tCleanup (%.02f%%): OS: %.06f CPU: %.06f\n", Cleanup_Percent, Cleanup_OS, Cleanup_CPU);
+        PrintDebugPerfTimeStep(OS_Timer6, OS_Timer0, TotalSeconds, OS_Freq, "Total");
+        PrintDebugPerfTimeStep(OS_Timer1, OS_Timer0, TotalSeconds, OS_Freq, "Startup");
+        PrintDebugPerfTimeStep(OS_Timer2, OS_Timer1, TotalSeconds, OS_Freq, "Generation");
+        PrintDebugPerfTimeStep(OS_Timer3, OS_Timer2, TotalSeconds, OS_Freq, "Write JSON");
+        PrintDebugPerfTimeStep(OS_Timer4, OS_Timer3, TotalSeconds, OS_Freq, "Read JSON");
+        PrintDebugPerfTimeStep(OS_Timer5, OS_Timer4, TotalSeconds, OS_Freq, "Calculate Haversine Average");
+        PrintDebugPerfTimeStep(OS_Timer6, OS_Timer5, TotalSeconds, OS_Freq, "Cleanup");
     }
+
 }
 
