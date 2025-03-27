@@ -1,6 +1,5 @@
 #include "haversine_common.h"
 #include "haversine_ref0.h"
-#include "haversine_ref0_json.h"
 
 #ifndef UNITY_BUILD
 #define UNITY_BUILD (0)
@@ -8,7 +7,6 @@
 
 #if UNITY_BUILD
 #include "haversine_ref0.cpp"
-#include "haversine_ref0_json.cpp"
 #endif // UNITY_BUILD
 
 /*

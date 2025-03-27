@@ -14,16 +14,6 @@
 
 namespace Haversine_Ref0
 {
-    f64 CalculateHaversine(HPair Pair);
-    f64 CalculateAverage(HList List);
-    HList GenerateDataUniform(int PairCount, int Seed);
-    HList GenerateDataClustered(int PairCount, int Seed, int ClusterCount);
-    void PrintData(HList List);
-    void WriteDataAsBinary(HList List, const char* FileName);
-    void WriteDataAsJSON(HList List, const char* FileName);
-    HList ReadFileAsBinary(const char* FileName);
-    HList ReadFileAsJSON(const char* FileName);
-
     struct FileContentsT
     {
         int Size;
@@ -33,6 +23,17 @@ namespace Haversine_Ref0
         void Read(const char* FileName, bool bAppendNull = false);
         void Write(const char* FileName);
     };
+
+    f64 CalculateHaversine(HPair Pair);
+    f64 CalculateAverage(HList List);
+    HList GenerateDataUniform(int PairCount, int Seed);
+    HList GenerateDataClustered(int PairCount, int Seed, int ClusterCount);
+    void PrintData(HList List);
+    void WriteDataAsBinary(HList List, const char* FileName);
+    void WriteDataAsJSON(HList List, const char* FileName);
+    HList ReadFileAsBinary(const char* FileName);
+    HList ReadFileAsJSON(const char* FileName);
+    HList ParseJSON(FileContentsT& InputFile);
 }
 
 #include "haversine_ref0.inl"
