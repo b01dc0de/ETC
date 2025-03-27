@@ -34,6 +34,8 @@ namespace Haversine_Ref0
     HList ReadFileAsBinary(const char* FileName);
     HList ReadFileAsJSON(const char* FileName);
     HList ParseJSON(FileContentsT& InputFile);
+
+    void DemoPipeline(int Seed, int Count, bool bClustered);
 }
 
 #include "haversine_ref0.inl"

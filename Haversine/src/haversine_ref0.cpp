@@ -42,11 +42,62 @@ namespace Haversine_Ref0_Helpers
         f64 Result = EarthRadius * c;
         return Result;
     }
+
+    u64 GetOSTimer();
+    u64 GetOSFreq();
+    u64 GetCPUTimer();
+
+    f64 GetElapsedTimeSeconds(u64 Delta, u64 Freq)
+    {
+        return (f64)Delta / (f64)Freq;
+    }
+}
+
+#if _WIN32
+#include <intrin.h>
+#include <windows.h>
+u64 Haversine_Ref0_Helpers::GetOSTimer()
+{
+    LARGE_INTEGER PerfCount;
+    QueryPerformanceCounter(&PerfCount);
+    return PerfCount.QuadPart;
+}
+u64 Haversine_Ref0_Helpers::GetOSFreq()
+{
+    LARGE_INTEGER Freq;
+    QueryPerformanceFrequency(&Freq);
+    return Freq.QuadPart;
+}
+#else // NOT _WIN32
+#include <x86intrin.h>
+#include <sys/time.h>
+// TODO: These are untested currently until I build/run these on non-Windows platforms!!
+u64 Haversine_Ref0_Helpers::GetOSTimer()
+{
+    timeval tval;
+    gettimeofday(&tval, 0);
+    u64 Result = GetOSTimerFreq()*(u64)tval.tv_sex + (u64)tval.tv_usec;
+    return Result;
+}
+u64 Haversine_Ref0_Helpers::GetOSFreq() { return 1000000u; }
+#endif // _WIN32
+inline u64 Haversine_Ref0_Helpers::GetCPUTimer()
+{
+    return __rdtsc();
+}
+
+namespace Haversine_Ref0
+{
+    using namespace Haversine_Ref0_Helpers;
+
+    using RandomEngineT = std::default_random_engine;
+    using UniformRealDistT = std::uniform_real_distribution<double>;
+    using UniformIntDistT = std::uniform_int_distribution<int>;
 }
 
 double Haversine_Ref0::CalculateHaversine(HPair Pair)
 {
-    return Haversine_Ref0_Helpers::Haversine(Pair.X0, Pair.Y0, Pair.X1, Pair.Y1, EarthRadius);
+    return Haversine(Pair.X0, Pair.Y0, Pair.X1, Pair.Y1, EarthRadius);
 }
 
 double Haversine_Ref0::CalculateAverage(HList List)
@@ -60,10 +111,6 @@ double Haversine_Ref0::CalculateAverage(HList List)
     double Average = Sum / List.Count;
     return Average;
 }
-
-using RandomEngineT = std::default_random_engine;
-using UniformRealDistT = std::uniform_real_distribution<double>;
-using UniformIntDistT = std::uniform_int_distribution<int>;
 
 HList Haversine_Ref0::GenerateDataUniform(int PairCount, int Seed)
 {
@@ -900,5 +947,110 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
         Result = ParsePairsArray(Pairs);
     }
     return Result;
+}
+
+void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
+{
+    using namespace Haversine_Ref0_Helpers;
+
+    static constexpr int FileNameMaxSize = 64;
+    static constexpr int DefaultClusterCount = 8;
+
+    u64 OS_Freq = GetOSFreq();
+    u64 OS_Timer0 = GetOSTimer();
+    u64 CPU_Timer0 = GetCPUTimer();
+
+    u64 OS_Timer1 = 0u, CPU_Timer1 = 0u,
+        OS_Timer2 = 0u, CPU_Timer2 = 0u,
+        OS_Timer3 = 0u, CPU_Timer3 = 0u,
+        OS_Timer4 = 0u, CPU_Timer4 = 0u,
+        OS_Timer5 = 0u, CPU_Timer5 = 0u,
+        OS_Timer6 = 0u, CPU_Timer6 = 0u;
+
+    char JSONFileName[FileNameMaxSize];
+    HList PairList = {};
+
+    OS_Timer1 = GetOSTimer();
+    CPU_Timer1 = GetCPUTimer();
+
+    if (bClustered)
+    {
+        PairList = Haversine_Ref0::GenerateDataClustered(Count, Count, DefaultClusterCount);
+        (void)sprintf_s(JSONFileName, "output_seed%d_count%d_clusters%d.json",
+                Seed, Count, DefaultClusterCount);
+    }
+    else
+    {
+        PairList = Haversine_Ref0::GenerateDataUniform(Count, Seed);
+        (void)sprintf_s(JSONFileName, "output_seed%d_count%d_u.json",
+                Seed, Count);
+    }
+
+    OS_Timer2 = GetOSTimer();
+    CPU_Timer2 = GetCPUTimer();
+
+    Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
+    fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
+
+    OS_Timer3 = GetOSTimer();
+    CPU_Timer3 = GetCPUTimer();
+
+    HList ParsedPairs = Haversine_Ref0::ReadFileAsJSON(JSONFileName);
+    fprintf(stdout, "Calculating Haversine Average on parsed JSON file (%s) list of size %d:\n", JSONFileName, ParsedPairs.Count);
+
+    OS_Timer4 = GetOSTimer();
+    CPU_Timer4 = GetCPUTimer();
+
+    f64 HvAvg = Haversine_Ref0::CalculateAverage(ParsedPairs);
+    fprintf(stdout, "\tAverage: %f\n", HvAvg);
+
+    OS_Timer5 = GetOSTimer();
+    CPU_Timer5 = GetCPUTimer();
+
+    delete[] PairList.Data;
+    delete[] ParsedPairs.Data;
+
+    OS_Timer6 = GetOSTimer();
+    CPU_Timer6 = GetCPUTimer();
+
+    u64 CPU_Freq = OS_Freq * CPU_Timer6 / OS_Timer6;
+
+    {
+        f64 Total_OS = GetElapsedTimeSeconds(OS_Timer6 - OS_Timer0, OS_Freq);
+        f64 Total_CPU = GetElapsedTimeSeconds(CPU_Timer6 - CPU_Timer0, CPU_Freq);
+
+        f64 Startup_OS = GetElapsedTimeSeconds(OS_Timer1 - OS_Timer0, OS_Freq);
+        f64 Startup_CPU = GetElapsedTimeSeconds(CPU_Timer1 - CPU_Timer0, CPU_Freq);
+        f64 Startup_Percent = (Startup_OS / Total_OS) * 100.0f;
+
+        f64 Gen_OS = GetElapsedTimeSeconds(OS_Timer2 - OS_Timer1, OS_Freq);
+        f64 Gen_CPU = GetElapsedTimeSeconds(CPU_Timer2 - CPU_Timer1, CPU_Freq);
+        f64 Gen_Percent = (Gen_OS / Total_OS) * 100.0f;
+
+        f64 WriteJSON_OS = GetElapsedTimeSeconds(OS_Timer3 - OS_Timer2, OS_Freq);
+        f64 WriteJSON_CPU = GetElapsedTimeSeconds(CPU_Timer3 - CPU_Timer2, CPU_Freq);
+        f64 WriteJSON_Percent = (WriteJSON_OS / Total_OS) * 100.0f;
+
+        f64 ReadJSON_OS = GetElapsedTimeSeconds(OS_Timer4 - OS_Timer3, OS_Freq);
+        f64 ReadJSON_CPU = GetElapsedTimeSeconds(CPU_Timer4 - CPU_Timer3, CPU_Freq);
+        f64 ReadJSON_Percent = (ReadJSON_OS / Total_OS) * 100.0f;
+
+        f64 CalcAvg_OS = GetElapsedTimeSeconds(OS_Timer5 - OS_Timer4, OS_Freq);
+        f64 CalcAvg_CPU = GetElapsedTimeSeconds(CPU_Timer5 - CPU_Timer4, CPU_Freq);
+        f64 CalcAvg_Percent = (CalcAvg_OS / Total_OS) * 100.0f;
+
+        f64 Cleanup_OS = GetElapsedTimeSeconds(OS_Timer6 - OS_Timer5, OS_Freq);
+        f64 Cleanup_CPU = GetElapsedTimeSeconds(CPU_Timer6 - CPU_Timer5, CPU_Freq);
+        f64 Cleanup_Percent = (Cleanup_OS / Total_OS) * 100.0f;
+
+        fprintf(stdout, "Demo Time:\n\tOSFreq: %llu\tCPUFreq\n", OS_Freq, CPU_Freq);
+        fprintf(stdout, "\tTotal: OS: %.06f CPU: %.06f\n", Total_OS, Total_CPU);
+        fprintf(stdout, "\tStartup (%.02f%%): OS: %.06f CPU: %.06f\n", Startup_Percent, Startup_OS, Startup_CPU);
+        fprintf(stdout, "\tGeneration (%.02f%%): OS: %.06f CPU: %.06f\n", Gen_Percent, Gen_OS, Gen_CPU);
+        fprintf(stdout, "\tWrite JSON Data (%.02f%%): OS: %.06f CPU: %.06f\n", WriteJSON_Percent, WriteJSON_OS, WriteJSON_CPU);
+        fprintf(stdout, "\tRead JSON Data (%.02f%%): OS: %.06f CPU: %.06f\n", ReadJSON_Percent, ReadJSON_OS, ReadJSON_CPU);
+        fprintf(stdout, "\tCalculate Average (%.02f%%): OS: %.06f CPU: %.06f\n", CalcAvg_Percent, CalcAvg_OS, CalcAvg_CPU);
+        fprintf(stdout, "\tCleanup (%.02f%%): OS: %.06f CPU: %.06f\n", Cleanup_Percent, Cleanup_OS, Cleanup_CPU);
+    }
 }
 
