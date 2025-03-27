@@ -1,5 +1,4 @@
 #include "haversine_ref0.h"
-#include "haversine_ref0_json.h"
 
 constexpr double CoordinateMin = -180.0;
 constexpr double CoordinateMax = +180.0;
