@@ -1,7 +1,9 @@
 #include "haversine_ref0.h"
 
-constexpr double CoordinateMin = -180.0;
-constexpr double CoordinateMax = +180.0;
+constexpr double CoordXMin = -180.0;
+constexpr double CoordXMax = +180.0;
+constexpr double CoordYMin = -90.0;
+constexpr double CoordYMax = +90.0;
 constexpr double DegreesPerRadian = 0.01745329251994329577;
 constexpr double EarthRadius = 6372.8;
 
@@ -115,15 +117,16 @@ double Haversine_Ref0::CalculateAverage(HList List)
 HList Haversine_Ref0::GenerateDataUniform(int PairCount, int Seed)
 {
     RandomEngineT default_rand_engine(Seed);
-    UniformRealDistT coordinate_dist(CoordinateMin, CoordinateMax);
+    UniformRealDistT coordx_dist(CoordXMin, CoordXMax);
+    UniformRealDistT coordy_dist(CoordYMin, CoordYMax);
 
     HList Result = {PairCount, new HPair[PairCount]};
     for (int PairIdx = 0; PairIdx < PairCount; PairIdx++)
     {
-        Result.Data[PairIdx].X0 = coordinate_dist(default_rand_engine);
-        Result.Data[PairIdx].Y0 = coordinate_dist(default_rand_engine);
-        Result.Data[PairIdx].X1 = coordinate_dist(default_rand_engine);
-        Result.Data[PairIdx].Y1 = coordinate_dist(default_rand_engine);
+        Result.Data[PairIdx].X0 = coordx_dist(default_rand_engine);
+        Result.Data[PairIdx].Y0 = coordy_dist(default_rand_engine);
+        Result.Data[PairIdx].X1 = coordx_dist(default_rand_engine);
+        Result.Data[PairIdx].Y1 = coordy_dist(default_rand_engine);
     }
 
     fprintf(stdout, "Generated Pair data - Uniform - Count: %d, Seed: %d\n",
@@ -139,30 +142,33 @@ HList Haversine_Ref0::GenerateDataUniform(int PairCount, int Seed)
 HList Haversine_Ref0::GenerateDataClustered(int PairCount, int Seed, int ClusterCount)
 {
     RandomEngineT default_rand_engine(Seed);
-    UniformRealDistT coordinate_dist(CoordinateMin, CoordinateMax);
+    UniformRealDistT coordx_dist(CoordXMin, CoordXMax);
+    UniformRealDistT coordy_dist(CoordYMin, CoordYMax);
 
     HPair* Clusters = new HPair[ClusterCount];
     for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ClusterIdx++)
     {
-        Clusters[ClusterIdx].X0 = coordinate_dist(default_rand_engine);
-        Clusters[ClusterIdx].Y0 = coordinate_dist(default_rand_engine);
-        Clusters[ClusterIdx].X1 = coordinate_dist(default_rand_engine);
-        Clusters[ClusterIdx].Y1 = coordinate_dist(default_rand_engine);
+        Clusters[ClusterIdx].X0 = coordx_dist(default_rand_engine);
+        Clusters[ClusterIdx].Y0 = coordy_dist(default_rand_engine);
+        Clusters[ClusterIdx].X1 = coordx_dist(default_rand_engine);
+        Clusters[ClusterIdx].Y1 = coordy_dist(default_rand_engine);
     }
 
-    double MaxClusterOffset = CoordinateMax / (ClusterCount * 2);
+    double MaxClusterXOffset = CoordXMax / (ClusterCount * 2);
+    double MaxClusterYOffset = CoordYMax / (ClusterCount * 2);
     int MaxClusterIdx = ClusterCount - 1;
     UniformIntDistT clusteridx_dist(0, MaxClusterIdx);
-    UniformRealDistT clusteroffset_dist(-MaxClusterOffset, +MaxClusterOffset);
+    UniformRealDistT clusteroffsetx_dist(-MaxClusterXOffset, +MaxClusterXOffset);
+    UniformRealDistT clusteroffsety_dist(-MaxClusterYOffset, +MaxClusterYOffset);
 
     HList Result = {PairCount, new HPair[PairCount]};
     for (int PairIdx = 0; PairIdx < PairCount; PairIdx++)
     {
         int ClusterIdx = clusteridx_dist(default_rand_engine);
-        Result.Data[PairIdx].X0 = Clusters[ClusterIdx].X0 + clusteroffset_dist(default_rand_engine);
-        Result.Data[PairIdx].Y0 = Clusters[ClusterIdx].X0 + clusteroffset_dist(default_rand_engine);
-        Result.Data[PairIdx].X1 = Clusters[ClusterIdx].X1 + clusteroffset_dist(default_rand_engine);
-        Result.Data[PairIdx].Y1 = Clusters[ClusterIdx].X1 + clusteroffset_dist(default_rand_engine);
+        Result.Data[PairIdx].X0 = Clusters[ClusterIdx].X0 + clusteroffsetx_dist(default_rand_engine);
+        Result.Data[PairIdx].Y0 = Clusters[ClusterIdx].Y0 + clusteroffsety_dist(default_rand_engine);
+        Result.Data[PairIdx].X1 = Clusters[ClusterIdx].X1 + clusteroffsetx_dist(default_rand_engine);
+        Result.Data[PairIdx].Y1 = Clusters[ClusterIdx].Y1 + clusteroffsety_dist(default_rand_engine);
     }
 
     fprintf(stdout, "Generated Pair data - Clustered - Count: %d, Seed: %d\n",
