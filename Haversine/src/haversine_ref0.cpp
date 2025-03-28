@@ -1,4 +1,5 @@
 #include "haversine_ref0.h"
+#include "haversine_perf.h"
 
 constexpr f64 CoordXMin = -180.0;
 constexpr f64 CoordXMax = +180.0;
@@ -44,65 +45,6 @@ namespace Haversine_Ref0_Helpers
         f64 Result = EarthRadius * c;
         return Result;
     }
-
-#if _WIN32
-#include <intrin.h>
-#include <windows.h>
-    u64 GetOSTimer()
-    {
-        LARGE_INTEGER PerfCount;
-        QueryPerformanceCounter(&PerfCount);
-        return PerfCount.QuadPart;
-    }
-    u64 GetOSFreq()
-    {
-        LARGE_INTEGER Freq;
-        QueryPerformanceFrequency(&Freq);
-        return Freq.QuadPart;
-    }
-#else // NOT _WIN32
-#include <x86intrin.h>
-#include <sys/time.h>
-    // TODO: These are untested currently until I build/run these on non-Windows platforms!!
-    u64 GetOSTimer()
-    {
-        timeval tval;
-        gettimeofday(&tval, 0);
-        u64 Result = GetOSTimerFreq()*(u64)tval.tv_sex + (u64)tval.tv_usec;
-        return Result;
-    }
-    u64 GetOSFreq() { return 1000000u; }
-#endif // _WIN32
-    inline u64 GetCPUTimer()
-    {
-        return __rdtsc();
-    }
-
-    u64 EstimateCPUFreq()
-    {
-        u64 CPUStart = GetCPUTimer();
-        u64 OSFreq = GetOSFreq();
-        u64 OSBegin = GetOSTimer();
-        u64 OSEnd = 0;
-        u64 OSElapsed = 0;
-        while (OSElapsed < OSFreq)
-        {
-            OSEnd = GetOSTimer();
-            OSElapsed = OSEnd - OSBegin;
-        }
-
-        u64 CPUEnd = GetCPUTimer();
-        u64 CPUElapsed = GetCPUTimer();
-        if (OSElapsed)
-        {
-            return OSFreq * CPUElapsed / OSElapsed;
-        }
-        return 0;
-    }
-    f64 GetElapsedTimeSeconds(u64 Delta, u64 Freq)
-    {
-        return (f64)Delta / (f64)Freq;
-    }
 }
 
 namespace Haversine_Ref0
@@ -123,6 +65,8 @@ f64 Haversine_Ref0::CalculateHaversine(HPair Pair)
 
 f64 Haversine_Ref0::CalculateAverage(HList List)
 {
+    TIME_FUNC();
+
     f64 Sum = 0.0f;
     for (int PairIdx = 0; PairIdx < List.Count; PairIdx++)
     {
@@ -135,6 +79,8 @@ f64 Haversine_Ref0::CalculateAverage(HList List)
 
 HList Haversine_Ref0::GenerateDataUniform(int Seed, int Count)
 {
+    TIME_FUNC();
+
     RandomEngineT default_rand_engine(Seed);
     UniformRealDistT coordx_dist(CoordXMin, CoordXMax);
     UniformRealDistT coordy_dist(CoordYMin, CoordYMax);
@@ -160,6 +106,7 @@ HList Haversine_Ref0::GenerateDataUniform(int Seed, int Count)
 
 HList Haversine_Ref0::GenerateDataClustered(int Seed, int Count)
 {
+    TIME_FUNC();
 
     RandomEngineT default_rand_engine(Seed);
     UniformRealDistT coordx_dist(CoordXMin, CoordXMax);
@@ -216,12 +163,16 @@ void Haversine_Ref0::PrintData(HList List)
 
 void Haversine_Ref0::WriteDataAsBinary(HList List, const char* FileName)
 {
+    TIME_FUNC();
+
     FileContentsT OutputContents = { (int)sizeof(HPair)*List.Count, (u8*)List.Data };
     OutputContents.Write(FileName);
 }
 
 void Haversine_Ref0::WriteDataAsJSON(HList List, const char* FileName)
 {
+    TIME_FUNC();
+
     FILE* OutputFileHandle = nullptr;
     fopen_s(&OutputFileHandle, FileName, "wt");
 
@@ -278,6 +229,8 @@ HList Haversine_Ref0::ReadFileAsBinary(const char* FileName)
 
 HList Haversine_Ref0::ReadFileAsJSON(const char* FileName)
 {
+    TIME_FUNC();
+
     FileContentsT Input = {};
     Input.Read(FileName, true);
     HList Result = ParseJSON(Input);
@@ -975,8 +928,8 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
 void PrintDebugPerfTimeStep(u64 TimeEnd, u64 TimeBegin, f64 TotalSeconds, u64 Freq, const char* StepName)
 {
     u64 Delta = TimeEnd - TimeBegin;
-    f64 TimeSeconds = (f64)Delta / (f64)Freq;
-    fprintf(stdout, "%s: Took %.06f seconds\t(%.02f %% overall)\n", StepName, TimeSeconds, TimeSeconds / TotalSeconds * 100.0f);
+    f64 TimeS = (f64)Delta / (f64)Freq;
+    fprintf(stdout, "%s: Took %.06f ms\t(%.02f %% overall)\n", StepName, TimeS * 1000.0f, TimeS / TotalSeconds * 100.0f);
 };
 
 void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
@@ -985,21 +938,8 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
 
     static constexpr int FileNameMaxSize = 64;
 
-    u64 CPU_Timer0 = 0u, CPU_Timer1 = 0u,
-        CPU_Timer2 = 0u, CPU_Timer3 = 0u,
-        CPU_Timer4 = 0u, CPU_Timer5 = 0u,
-        CPU_Timer6 = 0u;
-
-    CPU_Timer0 = GetCPUTimer();
-
-    //u64 Debug_OSFreq = GetOSFreq();
-    //u64 Debug_CPUStart = GetCPUTimer();
-    //u64 Debug_OSStart = GetOSTimer();
-
     char JSONFileName[FileNameMaxSize];
     HList PairList = {};
-
-    CPU_Timer1 = GetCPUTimer();
 
     if (bClustered)
     {
@@ -1014,61 +954,20 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
                 Seed, Count);
     }
 
-    CPU_Timer2 = GetCPUTimer();
-
     Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
     fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
-
-    CPU_Timer3 = GetCPUTimer();
 
     HList ParsedPairs = Haversine_Ref0::ReadFileAsJSON(JSONFileName);
     fprintf(stdout, "Calculating Haversine Average on parsed JSON file (%s) list of size %d:\n", JSONFileName, ParsedPairs.Count);
 
-    CPU_Timer4 = GetCPUTimer();
-
     f64 HvAvg = Haversine_Ref0::CalculateAverage(ParsedPairs);
     fprintf(stdout, "\tAverage: %f\n", HvAvg);
 
-    CPU_Timer5 = GetCPUTimer();
-
-    delete[] PairList.Data;
-    delete[] ParsedPairs.Data;
-
-    CPU_Timer6 = GetCPUTimer();
-
-    u64 CPU_Freq = EstimateCPUFreq();
-
-    // NOTE: Following block is imported from perfaware/part2/listing_0073
-    /*
     {
-        u64 Debug_OSEnd = GetOSTimer();
-        u64 Debug_OSElapsed = Debug_OSEnd - Debug_OSStart;
-        u64 Debug_CPUEnd = GetCPUTimer();
-        u64 Debug_CPUElapsed = Debug_CPUEnd - Debug_CPUStart;
-        u64 Debug_CPUFreq = 0;
-        if (Debug_OSElapsed) { Debug_CPUFreq = Debug_OSFreq * Debug_CPUElapsed / Debug_OSElapsed; }
-
-        printf("[debug][ref] OS Timer: %llu -> %llu = %llu elapsed\n", Debug_OSStart, Debug_OSEnd, Debug_OSElapsed);
-        printf("[debug][ref] OS Seconds: %.4f\n", (f64)Debug_OSElapsed/(f64)Debug_OSFreq);
-        printf("[debug][ref] CPU Timer: %llu -> %llu = %llu elapsed\n", Debug_CPUStart, Debug_CPUEnd, Debug_CPUElapsed);
-        printf("[debug][ref] CPU Freq: %llu (guessed)\n\n", Debug_CPUFreq);
-        printf("[debug][ref] CPU Seconds: %.4f (guessed)\n\n", (f64)Debug_CPUElapsed / (f64)Debug_CPUFreq);
+        //TIME_BLOCK(Cleanup);
+        _PerfTimings::_ScopedPerfTiming _SPF_Cleanup("DemoPipeline::" "Cleanup");
+        delete[] PairList.Data;
+        delete[] ParsedPairs.Data;
     }
-    */
-
-    {
-        f64 TotalSeconds = (f64)(CPU_Timer6 - CPU_Timer0) / (f64)CPU_Freq;
-
-        fprintf(stdout, "Using CPU Timer:\n");
-        PrintDebugPerfTimeStep(CPU_Timer6, CPU_Timer0, TotalSeconds, CPU_Freq, "Total");
-        PrintDebugPerfTimeStep(CPU_Timer1, CPU_Timer0, TotalSeconds, CPU_Freq, "Startup");
-        PrintDebugPerfTimeStep(CPU_Timer2, CPU_Timer1, TotalSeconds, CPU_Freq, "Generation");
-        PrintDebugPerfTimeStep(CPU_Timer3, CPU_Timer2, TotalSeconds, CPU_Freq, "Write JSON");
-        PrintDebugPerfTimeStep(CPU_Timer4, CPU_Timer3, TotalSeconds, CPU_Freq, "Read JSON");
-        PrintDebugPerfTimeStep(CPU_Timer5, CPU_Timer4, TotalSeconds, CPU_Freq, "Calculate Haversine Average");
-        PrintDebugPerfTimeStep(CPU_Timer6, CPU_Timer5, TotalSeconds, CPU_Freq, "Cleanup");
-        fprintf(stdout, "\n\n");
-    }
-
 }
 

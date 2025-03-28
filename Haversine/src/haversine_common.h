@@ -38,5 +38,12 @@ struct CoordPairList
 using HPair = CoordPair;
 using HList = CoordPairList;
 
+struct PerfTiming
+{
+    const char* FuncName;
+    u64 Begin;
+    u64 End;
+};
+
 #endif // HAVERSINE_COMMON_H
 

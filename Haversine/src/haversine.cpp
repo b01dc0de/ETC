@@ -1,4 +1,5 @@
 #include "haversine_common.h"
+#include "haversine_perf.h"
 #include "haversine_ref0.h"
 
 #ifndef UNITY_BUILD
@@ -6,6 +7,7 @@
 #endif // ifndef UNITY_BUILD
 
 #if UNITY_BUILD
+#include "haversine_perf.cpp"
 #include "haversine_ref0.cpp"
 #endif // UNITY_BUILD
 
@@ -18,6 +20,8 @@ int main(int ArgCount, const char* ArgValues[])
 {
     constexpr int DefaultCount = 10000;
     constexpr int DefaultSeed = 156208;
+
+    PROFILING_BEGIN();
 
     constexpr int BufferSize = 64;
     if (ArgCount == 2 && strcmp(ArgValues[1], "defaultall") == 0)
@@ -56,5 +60,7 @@ int main(int ArgCount, const char* ArgValues[])
 
         Haversine_Ref0::DemoPipeline(Seed, Count, true);
     }
+
+    PROFILING_END();
 }
 
