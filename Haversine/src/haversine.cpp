@@ -23,6 +23,7 @@ int main(int ArgCount, const char* ArgValues[])
     if (ArgCount == 2 && strcmp(ArgValues[1], "defaultall") == 0)
     {
         Haversine_Ref0::DemoPipeline(DefaultSeed, DefaultCount, true);
+        //Haversine_Ref0::DemoPipeline(DefaultSeed, DefaultCount, false);
     }
     /*
     else if (ArgCount == 2 && strcmp(ArgValues[1], "default") == 0)

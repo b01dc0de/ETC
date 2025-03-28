@@ -1,13 +1,11 @@
 #include "haversine_ref0.h"
 
-constexpr double CoordXMin = -180.0;
-constexpr double CoordXMax = +180.0;
-//constexpr double CoordYMin = -90.0;
-//constexpr double CoordYMax = +90.0;
-constexpr double CoordYMin = CoordXMin;
-constexpr double CoordYMax = CoordXMax;
-constexpr double DegreesPerRadian = 0.01745329251994329577;
-constexpr double EarthRadius = 6372.8;
+constexpr f64 CoordXMin = -180.0;
+constexpr f64 CoordXMax = +180.0;
+constexpr double CoordYMin = -90.0;
+constexpr double CoordYMax = +90.0;
+constexpr f64 DegreesPerRadian = 0.01745329251994329577;
+constexpr f64 EarthRadius = 6372.8;
 
 namespace Haversine_Ref0_Helpers
 {
@@ -112,26 +110,26 @@ namespace Haversine_Ref0
     using namespace Haversine_Ref0_Helpers;
 
     using RandomEngineT = std::default_random_engine;
-    using UniformRealDistT = std::uniform_real_distribution<double>;
+    using UniformRealDistT = std::uniform_real_distribution<f64>;
     using UniformIntDistT = std::uniform_int_distribution<int>;
 
     static constexpr int DefaultClusterCount = 8;
 }
 
-double Haversine_Ref0::CalculateHaversine(HPair Pair)
+f64 Haversine_Ref0::CalculateHaversine(HPair Pair)
 {
     return Haversine(Pair.X0, Pair.Y0, Pair.X1, Pair.Y1, EarthRadius);
 }
 
-double Haversine_Ref0::CalculateAverage(HList List)
+f64 Haversine_Ref0::CalculateAverage(HList List)
 {
-    double Sum = 0.0f;
+    f64 Sum = 0.0f;
     for (int PairIdx = 0; PairIdx < List.Count; PairIdx++)
     {
-        double fHaversine = CalculateHaversine(List.Data[PairIdx]);
+        f64 fHaversine = CalculateHaversine(List.Data[PairIdx]);
         Sum += fHaversine;
     }
-    double Average = Sum / List.Count;
+    f64 Average = Sum / (f64)List.Count;
     return Average;
 }
 
@@ -154,7 +152,7 @@ HList Haversine_Ref0::GenerateDataUniform(int Seed, int Count)
             Count, Seed);
     PrintData(Result);
 
-    double Average = CalculateAverage(Result);
+    f64 Average = CalculateAverage(Result);
     printf("Average: %f\n", Average);
 
     return Result;
@@ -176,8 +174,8 @@ HList Haversine_Ref0::GenerateDataClustered(int Seed, int Count)
         Clusters[ClusterIdx].Y1 = coordy_dist(default_rand_engine);
     }
 
-    double MaxClusterXOffset = CoordXMax / (DefaultClusterCount * 2);
-    double MaxClusterYOffset = CoordYMax / (DefaultClusterCount * 2);
+    f64 MaxClusterXOffset = CoordXMax / (DefaultClusterCount * 2);
+    f64 MaxClusterYOffset = CoordYMax / (DefaultClusterCount * 2);
     int MaxClusterIdx = DefaultClusterCount - 1;
     UniformIntDistT clusteridx_dist(0, MaxClusterIdx);
     UniformRealDistT clusteroffsetx_dist(-MaxClusterXOffset, +MaxClusterXOffset);
@@ -196,10 +194,7 @@ HList Haversine_Ref0::GenerateDataClustered(int Seed, int Count)
     fprintf(stdout, "Generated Pair data - Clustered - Count: %d, Seed: %d\n",
             Count, Seed);
     constexpr bool bPrintGeneratedData = false;
-    if (bPrintGeneratedData)
-    {
-        PrintData(Result);
-    }
+    if (bPrintGeneratedData) { PrintData(Result); }
 
     double Average = CalculateAverage(Result);
     printf("Average: %f\n", Average);
@@ -1008,13 +1003,13 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
 
     if (bClustered)
     {
-        PairList = Haversine_Ref0::GenerateDataClustered(Count, Seed);
+        PairList = Haversine_Ref0::GenerateDataClustered(Seed, Count);
         (void)sprintf_s(JSONFileName, "output_seed%d_count%d_clusters%d.json",
                 Seed, Count, DefaultClusterCount);
     }
     else
     {
-        PairList = Haversine_Ref0::GenerateDataUniform(Count, Seed);
+        PairList = Haversine_Ref0::GenerateDataUniform(Seed, Count);
         (void)sprintf_s(JSONFileName, "output_seed%d_count%d_u.json",
                 Seed, Count);
     }
