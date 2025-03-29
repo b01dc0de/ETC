@@ -61,15 +61,15 @@ namespace Perf
         return (f64)Delta / (f64)Freq;
     }
 
-    static constexpr int MaxEntries = 4096;
-
     static u64 TotalBegin = 0;
     static u64 TotalEnd = 0;
+    static bool bProfiling = false;
+
+#if ENABLE_PROFILER
+    static constexpr int MaxEntries = 4096;
 
     static int GlobalCurrentIndex = 0;
     static ProfileEntry Entries[MaxEntries] = {};
-
-    static bool bProfiling = false;
 
     ScopedTiming::ScopedTiming(const char* InName, int Index)
     {
@@ -124,7 +124,6 @@ namespace Perf
             f64 TotalTime = (f64)(TotalEnd - TotalBegin) / (f64)CPUFreq * 1000.0;
 
             fprintf(stdout, "BEGIN PRINT TIMINGS:\n");
-            fprintf(stdout, "\t[Total]: %.04f ms\n", TotalTime);
             for (int Idx = 1; Idx < MaxEntries; Idx++)
             {
                 if (!Entries[Idx].Name || !Entries[Idx].HitCount) { continue; }
@@ -147,6 +146,7 @@ namespace Perf
             fprintf(stdout, ":END PRINT TIMINGS\n");
         }
     }
+#endif // ENABLE_PROFILER
 
     void BeginProfiling()
     {
@@ -162,7 +162,12 @@ namespace Perf
         if (bProfiling)
         {
             TotalEnd = ReadCPUTimer();
+            u64 CPUFreq = EstimateCPUFreq();
+            f64 TotalTime = (f64)(TotalEnd - TotalBegin) / (f64)CPUFreq * 1000.0;
+            fprintf(stdout, "\t[Total]: %.04f ms\n", TotalTime);
+#if ENABLE_PROFILER
             PrintTimings(Entries);
+#endif // ENABLE_PROFILER
             bProfiling = false;
         }
     }

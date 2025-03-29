@@ -3,6 +3,10 @@
 
 #include "haversine_common.h"
 
+#ifndef ENABLE_PROFILER
+#define ENABLE_PROFILER (0)
+#endif // ENABLE_PROFILER
+
 namespace Perf
 {
     u64 ReadOSTimer();
@@ -35,9 +39,13 @@ namespace Perf
 
 #define PROFILING_BEGIN() Perf::BeginProfiling()
 #define PROFILING_END() Perf::EndProfiling()
-
+#if ENABLE_PROFILER
 #define TIME_FUNC() Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__);
 #define TIME_BLOCK(name) Perf::ScopedTiming _ST_##name(#name, __COUNTER__);
+#else
+#define TIME_FUNC() (void)0
+#define TIME_BLOCK(name) (void)0
+#endif // ENABLE_PROFILER
 
 #endif // HAVERSINE_PERF_H
 
