@@ -61,14 +61,19 @@ namespace Perf
         return (f64)Delta / (f64)Freq;
     }
 
-    ProfileEntry Total;
-    int EntriesCount = 0;
+    int ParentIndex = 0;
+    u64 TotalBegin = 0;
+    u64 TotalEnd = 0;
+    int EntriesCount = 1;
     ProfileEntry Entries[MaxEntries] = {};
 
-    void ScopedTiming::Start(const char *InName)
+    ScopedTiming::ScopedTiming(const char* InName, int Index) { Start(InName, Index); }
+    ScopedTiming::~ScopedTiming() { Stop(); }
+    void ScopedTiming::Start(const char *InName, int Index)
     {
         Name = InName;
-        EntryIdx = EntriesCount++;
+        EntryIdx = Index;
+        EntriesCount++;
         Begin = ReadCPUTimer();
     }
     void ScopedTiming::Stop()
@@ -80,27 +85,23 @@ namespace Perf
         ++WriteEntry->HitCount;
         WriteEntry->Time += End - Begin;
     }
-    ScopedTiming::ScopedTiming(const char* InName) { Start(InName); }
-    ScopedTiming::~ScopedTiming() { Stop(); }
 
-    void PrintTimings(ProfileEntry* Entries, int NumEntries)
+    void PrintTimings(ProfileEntry* Entries)
     {
-        if (NumEntries >= MaxEntries)
+        if (EntriesCount >= MaxEntries)
         {
             fprintf(stdout, "[error] Too many timings (%d) for timing buffer size (%d)!\n",
-                    NumEntries, MaxEntries);
+                    EntriesCount, MaxEntries);
         }
         else
         {
             u64 CPUFreq = EstimateCPUFreq();
 
-            f64 TotalTime = (f64)Total.Time / (f64)CPUFreq * 1000.0;
+            f64 TotalTime = (f64)(TotalEnd - TotalBegin) / (f64)CPUFreq * 1000.0;
 
             fprintf(stdout, "BEGIN PRINT TIMINGS:\n");
-            fprintf(stdout, "\t%s : %.04f ms\n",
-                    Total.Name,
-                    TotalTime);
-            for (int Idx = 0; Idx < NumEntries; Idx++)
+            fprintf(stdout, "\t[Total]: %.04f ms\n", TotalTime);
+            for (int Idx = 1; Idx < EntriesCount; Idx++)
             {
                 f64 EntryTime = (f64)Entries[Idx].Time / (f64)CPUFreq * 1000.0f;
                 f64 EntryPercent = (f64)EntryTime / TotalTime * 100.0;

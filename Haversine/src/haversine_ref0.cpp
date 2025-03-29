@@ -964,8 +964,7 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
     fprintf(stdout, "\tAverage: %f\n", HvAvg);
 
     {
-        //TIME_BLOCK(Cleanup);
-        Perf::ScopedTiming SPF_Cleanup("DemoPipeline::" "Cleanup");
+        TIME_BLOCK(Cleanup);
         delete[] PairList.Data;
         delete[] ParsedPairs.Data;
     }

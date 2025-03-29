@@ -15,43 +15,42 @@ namespace Perf
         const char* Name;
         u64 HitCount;
         u64 Time;
+        //bool bActive;
     };
 
     static constexpr int MaxEntries = 4096;
 
-    extern ProfileEntry Total;
-    extern int EntriesCount;
+    extern u64 TotalBegin;
+    extern u64 TotalEnd;
     extern ProfileEntry Entries[MaxEntries];
 
     struct ScopedTiming
     {
         const char* Name;
         int EntryIdx;
+        int ParentIdx;
         u64 Begin;
 
-        void Start(const char *InName);
-        void Stop();
-        ScopedTiming(const char* InName);
+        ScopedTiming(const char* InName, int Index);
         ~ScopedTiming();
+        void Start(const char *InName, int Index);
+        void Stop();
     };
 
-    void PrintTimings(ProfileEntry* Entries, int NumEntries);
+    void PrintTimings(ProfileEntry* Entries);
 }
 
 #define PROFILING_BEGIN()\
-    Perf::EntriesCount= 0;\
-    Perf::Total.Name = "[Total]";\
-    Perf::Total.HitCount = 1;\
-    Perf::Total.Time = Perf::ReadCPUTimer();
+    Perf::TotalBegin = Perf::ReadCPUTimer();
 
 #define PROFILING_END()\
-    Perf::Total.Time = Perf::ReadCPUTimer() - Perf::Total.Time;\
-    Perf::PrintTimings(Perf::Entries, Perf::EntriesCount);
+    Perf::TotalEnd = Perf::ReadCPUTimer();\
+    Perf::PrintTimings(Perf::Entries);
 
 #define TIME_FUNC()\
-    Perf::ScopedTiming _ST_##__func__(__func__);
+    Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__);
 #define TIME_BLOCK(name)\
-    Perf::ScopedTiming _ST_##name(__func__ #name);
+    Perf::ScopedTiming _ST_##name(__func__, __COUNTER__);
 
 #endif // HAVERSINE_PERF_H
 
