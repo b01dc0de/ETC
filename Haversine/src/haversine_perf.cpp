@@ -61,37 +61,61 @@ namespace Perf
         return (f64)Delta / (f64)Freq;
     }
 
-    int ParentIndex = 0;
-    u64 TotalBegin = 0;
-    u64 TotalEnd = 0;
-    int EntriesCount = 1;
-    ProfileEntry Entries[MaxEntries] = {};
+    static constexpr int MaxEntries = 4096;
 
-    ScopedTiming::ScopedTiming(const char* InName, int Index) { Start(InName, Index); }
-    ScopedTiming::~ScopedTiming() { Stop(); }
-    void ScopedTiming::Start(const char *InName, int Index)
+    static u64 TotalBegin = 0;
+    static u64 TotalEnd = 0;
+
+    static int GlobalCurrentIndex = 0;
+    static ProfileEntry Entries[MaxEntries] = {};
+
+    static bool bProfiling = false;
+
+    ScopedTiming::ScopedTiming(const char* InName, int Index)
     {
-        Name = InName;
-        EntryIdx = Index;
-        EntriesCount++;
-        Begin = ReadCPUTimer();
+        static constexpr int StartIdxOffset = 1;
+        EntryIdx = Index + StartIdxOffset;
+        if (!Entries[EntryIdx].bActive)
+        {
+            Entries[EntryIdx].bActive = true;
+            Entries[EntryIdx].Name = InName;
+            EntryIdx = Index + StartIdxOffset;
+            ParentIdx = GlobalCurrentIndex;
+            GlobalCurrentIndex = EntryIdx;
+            Begin = ReadCPUTimer();
+        }
+        else
+        {
+            EntryIdx = 0;
+        }
     }
-    void ScopedTiming::Stop()
+    ScopedTiming::~ScopedTiming()
     {
-        u64 End = ReadCPUTimer();
+        if (EntryIdx)
+        {
+            u64 Delta = ReadCPUTimer() - Begin;
 
-        ProfileEntry* WriteEntry = &Entries[EntryIdx];
-        WriteEntry->Name = Name;
-        ++WriteEntry->HitCount;
-        WriteEntry->Time += End - Begin;
+            if (ParentIdx)
+            {
+                ProfileEntry* Parent = Entries + ParentIdx;
+                Parent->TimeChildren += Delta;
+            }
+            GlobalCurrentIndex = ParentIdx;
+
+            ProfileEntry* ThisEntry = Entries + EntryIdx;
+            ++ThisEntry->HitCount;
+            ThisEntry->Time += Delta;
+            ThisEntry->bActive = false;
+        }
     }
 
     void PrintTimings(ProfileEntry* Entries)
     {
-        if (EntriesCount >= MaxEntries)
+        // TODO: Figure out a better way of doing this check
+        if (__COUNTER__ >= MaxEntries)
         {
             fprintf(stdout, "[error] Too many timings (%d) for timing buffer size (%d)!\n",
-                    EntriesCount, MaxEntries);
+                    __COUNTER__, MaxEntries);
         }
         else
         {
@@ -101,15 +125,46 @@ namespace Perf
 
             fprintf(stdout, "BEGIN PRINT TIMINGS:\n");
             fprintf(stdout, "\t[Total]: %.04f ms\n", TotalTime);
-            for (int Idx = 1; Idx < EntriesCount; Idx++)
+            for (int Idx = 1; Idx < MaxEntries; Idx++)
             {
-                f64 EntryTime = (f64)Entries[Idx].Time / (f64)CPUFreq * 1000.0f;
+                if (!Entries[Idx].Name || !Entries[Idx].HitCount) { continue; }
+
+                f64 EntryTime = (f64)(Entries[Idx].Time - Entries[Idx].TimeChildren) / (f64)CPUFreq * 1000.0f;
                 f64 EntryPercent = (f64)EntryTime / TotalTime * 100.0;
-                fprintf(stdout, "\t%s[%llu]: %.04f ms (%.02f%%)\n",
+
+                fprintf(stdout, "\t%s[%u]: %.04f ms (%.02f%%)\n",
                         Entries[Idx].Name, Entries[Idx].HitCount,
                         EntryTime, EntryPercent);
+                if (Entries[Idx].TimeChildren)
+                {
+                    f64 ChildrenTime = (f64)Entries[Idx].TimeChildren / (f64)CPUFreq * 1000.0f;
+                    f64 ChildrenPercent = (f64)ChildrenTime / TotalTime * 100.0;
+                    fprintf(stdout, "\t\tChildren: %.04f ms (%.02f%%)\n",
+                            ChildrenTime, ChildrenPercent);
+
+                }
             }
             fprintf(stdout, ":END PRINT TIMINGS\n");
         }
     }
+
+    void BeginProfiling()
+    {
+        if (!bProfiling)
+        {
+            TotalBegin = ReadCPUTimer();
+            bProfiling = true;
+        }
+    }
+
+    void EndProfiling()
+    {
+        if (bProfiling)
+        {
+            TotalEnd = ReadCPUTimer();
+            PrintTimings(Entries);
+            bProfiling = false;
+        }
+    }
+
 }

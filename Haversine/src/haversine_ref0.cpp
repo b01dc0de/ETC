@@ -937,8 +937,8 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
     using namespace Haversine_Ref0_Helpers;
 
     static constexpr int FileNameMaxSize = 64;
-
     char JSONFileName[FileNameMaxSize];
+
     HList PairList = {};
 
     if (bClustered)
