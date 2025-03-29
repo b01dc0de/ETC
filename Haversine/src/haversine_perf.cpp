@@ -1,6 +1,6 @@
 #include "haversine_perf.h"
 
-namespace PerfTimings
+namespace Perf
 {
 #if _WIN32
 #include <intrin.h>
@@ -55,59 +55,59 @@ namespace PerfTimings
         }
         return 0;
     }
+
     f64 GetElapsedTimeSeconds(u64 Delta, u64 Freq)
     {
         return (f64)Delta / (f64)Freq;
     }
 
-    u64 PerfTimingEntry::GetDelta()
+    u64 ProfileEntry::GetDelta()
     {
         if (End > Begin) { return End - Begin; }
         else { return 0u; }
     }
 
-    PerfTimingEntry Total;
-    int PerfTimingsCount = 0;
-    PerfTimingEntry PerfEntries[MaxTimingsCount] = {};
+    ProfileEntry Total;
+    int EntriesCount = 0;
+    ProfileEntry Entries[MaxEntries] = {};
 
-    void ScopedPerfTiming::Start(const char *InFuncName)
+    void ScopedTiming::Start(const char *InName)
     {
-        FuncName = InFuncName;
-        EntryIdx = PerfTimingsCount++;
+        Name = InName;
+        EntryIdx = EntriesCount++;
         Begin = ReadCPUTimer();
     }
-    void ScopedPerfTiming::Stop()
+    void ScopedTiming::Stop()
     {
         End = ReadCPUTimer();
-        PerfEntries[EntryIdx] = {FuncName, Begin, End};
+        Entries[EntryIdx] = {Name, Begin, End};
     }
-    ScopedPerfTiming::ScopedPerfTiming(const char* InFuncName) { Start(InFuncName); }
-    ScopedPerfTiming::~ScopedPerfTiming() { Stop(); }
+    ScopedTiming::ScopedTiming(const char* InName) { Start(InName); }
+    ScopedTiming::~ScopedTiming() { Stop(); }
 
-    void PrintTimings(PerfTimingEntry* Entries, int NumTimings)
+    void PrintTimings(ProfileEntry* Entries, int NumEntries)
     {
-        if (PerfTimings::PerfTimingsCount >= PerfTimings::MaxTimingsCount)
+        if (NumEntries >= MaxEntries)
         {
             fprintf(stdout, "[error] Too many timings (%d) for timing buffer size (%d)!\n",
-                    PerfTimings::PerfTimingsCount, PerfTimings::MaxTimingsCount);
-            return;
+                    NumEntries, MaxEntries);
         }
         else
         {
             u64 CPUFreq = EstimateCPUFreq();
 
-            f64 TotalTime = (f64)PerfTimings::Total.GetDelta() / (f64)CPUFreq * 1000.0;
+            f64 TotalTime = (f64)Total.GetDelta() / (f64)CPUFreq * 1000.0;
 
             fprintf(stdout, "BEGIN PRINT TIMINGS:\n");
             fprintf(stdout, "\t%s : %.04f ms\n",
-                    PerfTimings::Total.FuncName,
+                    Total.Name,
                     TotalTime);
-            for (int Idx = 0; Idx < PerfTimings::PerfTimingsCount; Idx++)
+            for (int Idx = 0; Idx < NumEntries; Idx++)
             {
-                f64 EntryTime = (f64)PerfEntries[Idx].GetDelta() / (f64)CPUFreq * 1000.0f;
+                f64 EntryTime = (f64)Entries[Idx].GetDelta() / (f64)CPUFreq * 1000.0f;
                 f64 EntryPercent = (f64)EntryTime / TotalTime * 100.0;
                 fprintf(stdout, "\t[%d] : %s : %.04f ms (%.02f%%)\n",
-                        Idx, PerfEntries[Idx].FuncName,
+                        Idx, Entries[Idx].Name,
                         EntryTime, EntryPercent);
             }
             fprintf(stdout, ":END PRINT TIMINGS\n");

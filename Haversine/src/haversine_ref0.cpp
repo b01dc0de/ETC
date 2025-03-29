@@ -965,7 +965,7 @@ void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
 
     {
         //TIME_BLOCK(Cleanup);
-        PerfTimings::ScopedPerfTiming SPF_Cleanup("DemoPipeline::" "Cleanup");
+        Perf::ScopedTiming SPF_Cleanup("DemoPipeline::" "Cleanup");
         delete[] PairList.Data;
         delete[] ParsedPairs.Data;
     }
