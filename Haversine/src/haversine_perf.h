@@ -13,9 +13,8 @@ namespace Perf
     struct ProfileEntry
     {
         const char* Name;
-        u64 Begin;
-        u64 End;
-        u64 GetDelta();
+        u64 HitCount;
+        u64 Time;
     };
 
     static constexpr int MaxEntries = 4096;
@@ -29,7 +28,6 @@ namespace Perf
         const char* Name;
         int EntryIdx;
         u64 Begin;
-        u64 End;
 
         void Start(const char *InName);
         void Stop();
@@ -43,11 +41,11 @@ namespace Perf
 #define PROFILING_BEGIN()\
     Perf::EntriesCount= 0;\
     Perf::Total.Name = "[Total]";\
-    Perf::Total.Begin = Perf::ReadCPUTimer();\
-    Perf::Total.End = 0u;
+    Perf::Total.HitCount = 1;\
+    Perf::Total.Time = Perf::ReadCPUTimer();
 
 #define PROFILING_END()\
-    Perf::Total.End = Perf::ReadCPUTimer();\
+    Perf::Total.Time = Perf::ReadCPUTimer() - Perf::Total.Time;\
     Perf::PrintTimings(Perf::Entries, Perf::EntriesCount);
 
 #define TIME_FUNC()\

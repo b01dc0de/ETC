@@ -61,12 +61,6 @@ namespace Perf
         return (f64)Delta / (f64)Freq;
     }
 
-    u64 ProfileEntry::GetDelta()
-    {
-        if (End > Begin) { return End - Begin; }
-        else { return 0u; }
-    }
-
     ProfileEntry Total;
     int EntriesCount = 0;
     ProfileEntry Entries[MaxEntries] = {};
@@ -79,8 +73,12 @@ namespace Perf
     }
     void ScopedTiming::Stop()
     {
-        End = ReadCPUTimer();
-        Entries[EntryIdx] = {Name, Begin, End};
+        u64 End = ReadCPUTimer();
+
+        ProfileEntry* WriteEntry = &Entries[EntryIdx];
+        WriteEntry->Name = Name;
+        ++WriteEntry->HitCount;
+        WriteEntry->Time += End - Begin;
     }
     ScopedTiming::ScopedTiming(const char* InName) { Start(InName); }
     ScopedTiming::~ScopedTiming() { Stop(); }
@@ -96,7 +94,7 @@ namespace Perf
         {
             u64 CPUFreq = EstimateCPUFreq();
 
-            f64 TotalTime = (f64)Total.GetDelta() / (f64)CPUFreq * 1000.0;
+            f64 TotalTime = (f64)Total.Time / (f64)CPUFreq * 1000.0;
 
             fprintf(stdout, "BEGIN PRINT TIMINGS:\n");
             fprintf(stdout, "\t%s : %.04f ms\n",
@@ -104,10 +102,10 @@ namespace Perf
                     TotalTime);
             for (int Idx = 0; Idx < NumEntries; Idx++)
             {
-                f64 EntryTime = (f64)Entries[Idx].GetDelta() / (f64)CPUFreq * 1000.0f;
+                f64 EntryTime = (f64)Entries[Idx].Time / (f64)CPUFreq * 1000.0f;
                 f64 EntryPercent = (f64)EntryTime / TotalTime * 100.0;
-                fprintf(stdout, "\t[%d] : %s : %.04f ms (%.02f%%)\n",
-                        Idx, Entries[Idx].Name,
+                fprintf(stdout, "\t%s[%llu]: %.04f ms (%.02f%%)\n",
+                        Entries[Idx].Name, Entries[Idx].HitCount,
                         EntryTime, EntryPercent);
             }
             fprintf(stdout, ":END PRINT TIMINGS\n");
