@@ -263,6 +263,7 @@ void Haversine_Ref0::FileContentsT::Read(const char* FileName, bool bAppendNull)
 
         if (FileSize > 0)
         {
+            TIME_BLOCK_DATA(fread_s, FileSize);
             Size = FileSize + (bAppendNull ? 1 : 0);
             Data = new u8[Size];
             fread_s(Data, FileSize, FileSize, 1, FileHandle);

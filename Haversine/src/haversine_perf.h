@@ -20,6 +20,7 @@ namespace Perf
         u64 HitCount;
         u64 TimeElapsedExclusive; // Does NOT include children
         u64 TimeElapsedInclusive; // Does include children
+        u64 BytesProcessed;
     };
 
     struct ScopedTiming
@@ -30,7 +31,7 @@ namespace Perf
         u32 ParentIndex;
         u32 Index;
 
-        ScopedTiming(const char* Name_, int Index_);
+        ScopedTiming(const char* Name_, u32 Index_, u64 Bytes_);
         ~ScopedTiming();
     };
 
@@ -41,11 +42,15 @@ namespace Perf
 #define PROFILING_BEGIN() Perf::BeginProfiling()
 #define PROFILING_END() Perf::EndProfiling()
 #if ENABLE_PROFILER
-#define TIME_FUNC() Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__ + 1);
-#define TIME_BLOCK(name) Perf::ScopedTiming _ST_##name(#name, __COUNTER__ + 1);
+#define TIME_FUNC() Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__ + 1, 0)
+#define TIME_BLOCK(name) Perf::ScopedTiming _ST_##name(#name, __COUNTER__ + 1, 0)
+#define TIME_FUNC_DATA(ByteCount) Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__ + 1, ByteCount)
+#define TIME_BLOCK_DATA(name, ByteCount) Perf::ScopedTiming _ST_##name(#name, __COUNTER__ + 1, ByteCount)
 #else
 #define TIME_FUNC() (void)0
 #define TIME_BLOCK(name) (void)0
+#define TIME_FUNC_DATA(ByteCount) (void)0
+#define TIME_BLOCK_DATA(name, ByteCount) (void)0
 #endif // ENABLE_PROFILER
 
 #endif // HAVERSINE_PERF_H

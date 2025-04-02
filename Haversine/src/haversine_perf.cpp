@@ -68,9 +68,9 @@ namespace Perf
 #if ENABLE_PROFILER
     static constexpr int MaxAnchors = 4096;
     static ProfileAnchor Anchors[MaxAnchors] = {};
-    static int GlobalParentIndex = 0;
+    static u32 GlobalParentIndex = 0;
 
-    ScopedTiming::ScopedTiming(const char* Name_, int Index_)
+    ScopedTiming::ScopedTiming(const char* Name_, u32 Index_, u64 Bytes_)
     {
         ParentIndex = GlobalParentIndex;
 
@@ -79,6 +79,7 @@ namespace Perf
 
         ProfileAnchor* Anchor = Anchors + Index;
         OldTimeElapsedInclusive = Anchor->TimeElapsedInclusive;
+        Anchor->BytesProcessed += Bytes_;
 
         GlobalParentIndex = Index;
         StartTime = ReadCPUTimer();
@@ -99,7 +100,7 @@ namespace Perf
         Anchor->Name = Name;
     }
 
-    void PrintAnchor(u64 TotalTime, ProfileAnchor* Anchor)
+    void PrintAnchor(u64 TotalTime, u64 Freq, ProfileAnchor* Anchor)
     {
         f64 Percent = 100.0 * ((f64)Anchor->TimeElapsedExclusive / (f64)TotalTime);
         printf("    %s[%llu]: %llu (%.2f%%", Anchor->Name, Anchor->HitCount, Anchor->TimeElapsedExclusive, Percent);
@@ -108,7 +109,20 @@ namespace Perf
             f64 PercentWithChildren = 100.0 * ((f64)Anchor->TimeElapsedInclusive / (f64)TotalTime);
             printf(", %.2f%% w/children", PercentWithChildren);
         }
-        printf(")\n");
+        printf(")");
+
+        if (Anchor->BytesProcessed)
+        {
+            constexpr f64 Megabyte = 1024.0 * 1024.0;
+            constexpr f64 Gigabyte = Megabyte * 1024.0;
+
+            f64 Seconds = (f64)Anchor->TimeElapsedInclusive / (f64)Freq;
+            f64 BytesPerSecond = (f64)Anchor->BytesProcessed / Seconds;
+            f64 MegabytesProcessed = (f64)Anchor->BytesProcessed / (f64)Megabyte;
+            f64 GigabytesProcessedPerSecond = BytesPerSecond / Gigabyte;
+            printf("    %.3fmb at %.2fgb/s\n", MegabytesProcessed, GigabytesProcessedPerSecond);
+        }
+        printf("\n");
     }
 
     void PrintTimings()
@@ -127,7 +141,7 @@ namespace Perf
             ProfileAnchor* Anchor = Anchors + Idx;
             if (Anchor->TimeElapsedInclusive)
             {
-                PrintAnchor(TotalTime, Anchor);
+                PrintAnchor(TotalTime, CPUFreq, Anchor);
             }
         }
     }
