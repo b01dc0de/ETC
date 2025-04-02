@@ -37,23 +37,28 @@ namespace Perf
 
     u64 EstimateCPUFreq()
     {
-        u64 CPUStart = ReadCPUTimer();
+        constexpr u64 ms_to_wait = 1000;
+
         u64 OSFreq = GetOSFreq();
+
+        u64 CPUStart = ReadCPUTimer();
         u64 OSBegin = ReadOSTimer();
+
         u64 OSEnd = 0;
         u64 OSElapsed = 0;
-        while (OSElapsed < OSFreq)
+        u64 OSWaitTime = OSFreq * ms_to_wait / 1000;
+        while (OSElapsed < OSWaitTime)
         {
             OSEnd = ReadOSTimer();
             OSElapsed = OSEnd - OSBegin;
         }
 
-        u64 CPUElapsed = ReadCPUTimer();
-        if (OSElapsed)
-        {
-            return OSFreq * CPUElapsed / OSElapsed;
-        }
-        return 0;
+        u64 CPUEnd = ReadCPUTimer();
+        u64 CPUElapsed = CPUEnd - CPUStart;
+        u64 CPUFreq = 0;
+
+        if (OSElapsed) { CPUFreq = OSFreq * CPUElapsed / OSElapsed; }
+        return CPUFreq;
     }
 
     f64 GetElapsedTimeSeconds(u64 Delta, u64 Freq)
@@ -63,7 +68,6 @@ namespace Perf
 
     static u64 TotalBegin = 0;
     static u64 TotalEnd = 0;
-    static bool bProfiling = false;
 
 #if ENABLE_PROFILER
     static constexpr int MaxAnchors = 4096;
@@ -103,13 +107,13 @@ namespace Perf
     void PrintAnchor(u64 TotalTime, u64 Freq, ProfileAnchor* Anchor)
     {
         f64 Percent = 100.0 * ((f64)Anchor->TimeElapsedExclusive / (f64)TotalTime);
-        printf("    %s[%llu]: %llu (%.2f%%", Anchor->Name, Anchor->HitCount, Anchor->TimeElapsedExclusive, Percent);
+        fprintf(stdout, "    %s[%llu]: %llu (%.2f%%", Anchor->Name, Anchor->HitCount, Anchor->TimeElapsedExclusive, Percent);
         if (Anchor->TimeElapsedInclusive != Anchor->TimeElapsedExclusive)
         {
             f64 PercentWithChildren = 100.0 * ((f64)Anchor->TimeElapsedInclusive / (f64)TotalTime);
-            printf(", %.2f%% w/children", PercentWithChildren);
+            fprintf(stdout, ", %.2f%% w/children", PercentWithChildren);
         }
-        printf(")");
+        fprintf(stdout, ")");
 
         if (Anchor->BytesProcessed)
         {
@@ -120,22 +124,32 @@ namespace Perf
             f64 BytesPerSecond = (f64)Anchor->BytesProcessed / Seconds;
             f64 MegabytesProcessed = (f64)Anchor->BytesProcessed / (f64)Megabyte;
             f64 GigabytesProcessedPerSecond = BytesPerSecond / Gigabyte;
-            printf("    %.3fmb at %.2fgb/s\n", MegabytesProcessed, GigabytesProcessedPerSecond);
+
+            f64 MilliSeconds = (f64)Anchor->TimeElapsedInclusive / (f64)Freq * 1000.0;
+            fprintf(stdout, "    %.3fmb at %.2fgb/s    (%.4fseconds)\n", MegabytesProcessed, GigabytesProcessedPerSecond, MilliSeconds);
         }
-        printf("\n");
+        fprintf(stdout, "\n");
     }
 
-    void PrintTimings()
+#endif // ENABLE_PROFILER
+
+    void BeginProfiling()
     {
+        TotalBegin = ReadCPUTimer();
+    }
+
+    void EndProfiling()
+    {
+        TotalEnd = ReadCPUTimer();
+
         u64 CPUFreq = EstimateCPUFreq();
-
         u64 TotalTime = TotalEnd - TotalBegin;
-
         if (CPUFreq)
         {
-            printf("\nTotal time: %0.4fms (CPU freq %llu)\n", 1000.0 * (f64)TotalTime / (f64)CPUFreq, CPUFreq);
+            f64 CPUFreq_GHz = (f64)CPUFreq / (1000.0 * 1000.0 * 1000.0);
+            fprintf(stdout, "\nTotal time: %0.4fms (CPU freq %llu    ~%.2f GHz)\n", 1000.0 * (f64)TotalTime / (f64)CPUFreq, CPUFreq, CPUFreq_GHz);
         }
-
+#if ENABLE_PROFILER
         for (int Idx = 0; Idx < MaxAnchors; Idx++)
         {
             ProfileAnchor* Anchor = Anchors + Idx;
@@ -144,33 +158,7 @@ namespace Perf
                 PrintAnchor(TotalTime, CPUFreq, Anchor);
             }
         }
-    }
 #endif // ENABLE_PROFILER
-
-    void BeginProfiling()
-    {
-        if (!bProfiling)
-        {
-            TotalBegin = ReadCPUTimer();
-            bProfiling = true;
-        }
-    }
-
-    void EndProfiling()
-    {
-        if (bProfiling)
-        {
-            TotalEnd = ReadCPUTimer();
-#if ENABLE_PROFILER
-            PrintTimings();
-#else
-            u64 CPUFreq = EstimateCPUFreq();
-            f64 TotalTime = (f64)(TotalEnd - TotalBegin) / (f64)CPUFreq * 1000.0;
-            fprintf(stdout, "\t[Total]: %.04f ms\n", TotalTime);
-#endif // ENABLE_PROFILER
-
-            bProfiling = false;
-        }
     }
 
 }
