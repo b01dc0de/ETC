@@ -58,6 +58,13 @@ namespace Haversine_Ref0
             , Data(new T[DefaultCapacity])
         {
         }
+        ~DynamicArray()
+        {
+            if (Data)
+            {
+                delete[] Data;
+            }
+        }
         int Resize(int NewCapacity)
         {
             if (NewCapacity > Capacity)

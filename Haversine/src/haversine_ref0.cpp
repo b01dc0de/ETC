@@ -349,6 +349,8 @@ namespace Haversine_Ref0
         JsonValue Value;
     };
 
+    void Release(JsonObject* Object, bool bRoot);
+
     struct JsonTreeStack
     {
         int Depth;
@@ -543,6 +545,42 @@ namespace Haversine_Ref0
 
     JsonObject* Query(JsonObject* Root, const char* Key);
     HList ParsePairsArray(JsonObject* Pairs);
+}
+
+void Haversine_Ref0::Release(JsonObject* Object, bool bRoot)
+{
+    if (!Object) { return; }
+
+    switch (Object->Value.Type)
+    {
+        case JsonType_Null:
+        case JsonType_NumberInt:
+        case JsonType_NumberFloat:
+        case JsonType_Bool:
+        {
+        } break;
+        case JsonType_String:
+        {
+            delete Object->Value.String;
+        } break;
+        case JsonType_Object:
+        case JsonType_Array:
+        {
+            DynamicArray<JsonObject*>* List = Object->Value.List;
+            if (List)
+            {
+                for (int ItemIdx = 0; ItemIdx < List->Num; ItemIdx++)
+                {
+                    Release((*List)[ItemIdx], false);
+                }
+                delete List;
+            }
+        } break;
+    }
+    if (!bRoot)
+    {
+        delete Object;
+    }
 }
 
 Haversine_Ref0::JsonToken Haversine_Ref0::ParseNextToken(char* Begin, JsonValue* OutValue, char** NextTokenBegin)
@@ -914,14 +952,13 @@ HList Haversine_Ref0::ParseJSON(FileContentsT& InputFile)
     HList Result = {};
     if (nullptr == InputFile.Data) { return Result; }
 
-    //fprintf(stdout, "PARSE BEGIN:\n");
     JsonObject Root = Haversine_Ref0::Parse((char*)InputFile.Data, InputFile.Size);
-    //fprintf(stdout, "PARSE END\n");
     JsonObject* Pairs = Query(&Root, "pairs");
     if (Pairs)
     {
         Result = ParsePairsArray(Pairs);
     }
+    Release(&Root, true);
     return Result;
 }
 
