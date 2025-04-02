@@ -13,6 +13,7 @@ struct MainExecParams
     MainExecType Type;
     u64 Seed;
     u64 Count;
+    const char* InputFileName;
     bool bClustered;
 };
 
@@ -36,7 +37,7 @@ MainExecType ParseExecType(const char* ArgV)
 
 MainExecParams ParseCmdLine(int ArgCount, const char** ArgValues)
 {
-    MainExecParams Result = { MainExecType::Error, 0, 0, true };
+    MainExecParams Result = { MainExecType::Error, 0, 0, nullptr, true };
 
     // Try default format: haversine.exe default [gen/calc/all]
     if ((ArgCount == 2 || ArgCount == 3) && strcmp(ArgValues[1], "default") == 0)
@@ -60,6 +61,11 @@ MainExecParams ParseCmdLine(int ArgCount, const char** ArgValues)
             Result.bClustered = true;
         }
     }
+    else if (ArgCount == 2)
+    {
+        Result.Type = MainExecType::Calc;
+        Result.InputFileName = ArgValues[1];
+    }
 
     return Result;
 }
@@ -70,21 +76,26 @@ void Main_Exec(MainExecParams* ExecParams)
     {
         u64 Seed = ExecParams->Seed;
         u64 Count = ExecParams->Count;
+        const char* InputFileName = ExecParams->InputFileName;
         bool bClustered = ExecParams->bClustered;
-        if (Seed && Count) switch (ExecParams->Type)
+        if (InputFileName || (Seed && Count))
         {
-            case MainExecType::Gen:
+            switch (ExecParams->Type)
             {
-                Haversine_Ref0::Gen(Seed, Count, bClustered);
-            } break;
-            case MainExecType::Calc:
-            {
-                Haversine_Ref0::Calc(Seed, Count, bClustered);
-            } break;
-            case MainExecType::Full:
-            {
-                Haversine_Ref0::Full(Seed, Count, bClustered);
-            } break;
+                case MainExecType::Gen:
+                {
+                    Haversine_Ref0::Gen(Seed, Count, bClustered);
+                } break;
+                case MainExecType::Calc:
+                {
+                    if (InputFileName) { Haversine_Ref0::Calc(InputFileName); }
+                    else { Haversine_Ref0::Calc(Seed, Count, bClustered); }
+                } break;
+                case MainExecType::Full:
+                {
+                    Haversine_Ref0::Full(Seed, Count, bClustered);
+                } break;
+            }
         }
     }
 }

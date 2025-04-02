@@ -1037,6 +1037,22 @@ void Haversine_Ref0::Calc(int Seed, int Count, bool bClustered)
     }
 }
 
+void Haversine_Ref0::Calc(const char* FileNameJSON)
+{
+    using namespace Haversine_Ref0_Helpers;
+
+    TIME_FUNC();
+
+    HList PairList = ReadFileAsJSON(FileNameJSON);
+    f64 HvAvg = CalculateAverage(PairList);
+    fprintf(stdout, "\tAverage: %f\n", HvAvg);
+
+    {
+        TIME_BLOCK(Calc_Cleanup);
+        delete[] PairList.Data;
+    }
+}
+
 void Haversine_Ref0::Full(int Seed, int Count, bool bClustered)
 {
     Gen(Seed, Count, bClustered);

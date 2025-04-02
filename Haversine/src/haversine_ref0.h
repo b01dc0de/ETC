@@ -39,6 +39,7 @@ namespace Haversine_Ref0
 
     void Gen(int Seed, int Count, bool bClustered);
     void Calc(int Seed, int Count, bool bClustered);
+    void Calc(const char* FileNameJSON);
     void Full(int Seed, int Count, bool bClustered);
 
     template <typename T>

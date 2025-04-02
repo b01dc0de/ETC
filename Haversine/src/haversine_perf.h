@@ -37,8 +37,6 @@ namespace Perf
 
     void BeginProfiling();
     void EndProfiling();
-
-    void ProfileRepeatTest();
 }
 
 #define PROFILING_BEGIN() Perf::BeginProfiling()
