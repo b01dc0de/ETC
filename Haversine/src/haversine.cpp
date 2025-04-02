@@ -64,3 +64,6 @@ int main(int ArgCount, const char* ArgValues[])
     PROFILING_END();
 }
 
+#if ENABLE_PROFILER
+static_assert(__COUNTER__ <= Perf::MaxAnchors, "Too many profile anchors!");
+#endif // ENABLE_PROFILER

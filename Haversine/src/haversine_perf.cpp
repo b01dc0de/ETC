@@ -66,84 +66,69 @@ namespace Perf
     static bool bProfiling = false;
 
 #if ENABLE_PROFILER
-    static constexpr int MaxEntries = 4096;
+    static constexpr int MaxAnchors = 4096;
+    static ProfileAnchor Anchors[MaxAnchors] = {};
+    static int GlobalParentIndex = 0;
 
-    static int GlobalCurrentIndex = 0;
-    static ProfileEntry Entries[MaxEntries] = {};
-
-    ScopedTiming::ScopedTiming(const char* InName, int Index)
+    ScopedTiming::ScopedTiming(const char* Name_, int Index_)
     {
-        static constexpr int StartIdxOffset = 1;
-        EntryIdx = Index + StartIdxOffset;
-        if (!Entries[EntryIdx].bActive)
-        {
-            Entries[EntryIdx].bActive = true;
-            Entries[EntryIdx].Name = InName;
-            EntryIdx = Index + StartIdxOffset;
-            ParentIdx = GlobalCurrentIndex;
-            GlobalCurrentIndex = EntryIdx;
-            Begin = ReadCPUTimer();
-        }
-        else
-        {
-            EntryIdx = 0;
-        }
+        ParentIndex = GlobalParentIndex;
+
+        Index = Index_;
+        Name = Name_;
+
+        ProfileAnchor* Anchor = Anchors + Index;
+        OldTimeElapsedInclusive = Anchor->TimeElapsedInclusive;
+
+        GlobalParentIndex = Index;
+        StartTime = ReadCPUTimer();
     }
     ScopedTiming::~ScopedTiming()
     {
-        if (EntryIdx)
-        {
-            u64 Delta = ReadCPUTimer() - Begin;
+        u64 TimeElapsed = ReadCPUTimer() - StartTime;
+        GlobalParentIndex = ParentIndex;
 
-            if (ParentIdx)
-            {
-                ProfileEntry* Parent = Entries + ParentIdx;
-                Parent->TimeChildren += Delta;
-            }
-            GlobalCurrentIndex = ParentIdx;
+        ProfileAnchor* Parent = Anchors + ParentIndex;
+        ProfileAnchor* Anchor = Anchors + Index;
 
-            ProfileEntry* ThisEntry = Entries + EntryIdx;
-            ++ThisEntry->HitCount;
-            ThisEntry->Time += Delta;
-            ThisEntry->bActive = false;
-        }
+        Parent->TimeElapsedExclusive -= TimeElapsed;
+        Anchor->TimeElapsedExclusive += TimeElapsed;
+        Anchor->TimeElapsedInclusive = OldTimeElapsedInclusive + TimeElapsed;
+        ++Anchor->HitCount;
+
+        Anchor->Name = Name;
     }
 
-    void PrintTimings(ProfileEntry* Entries)
+    void PrintAnchor(u64 TotalTime, ProfileAnchor* Anchor)
     {
-        // TODO: Figure out a better way of doing this check
-        if (__COUNTER__ >= MaxEntries)
+        f64 Percent = 100.0 * ((f64)Anchor->TimeElapsedExclusive / (f64)TotalTime);
+        printf("    %s[%llu]: %llu (%.2f%%", Anchor->Name, Anchor->HitCount, Anchor->TimeElapsedExclusive, Percent);
+        if (Anchor->TimeElapsedInclusive != Anchor->TimeElapsedExclusive)
         {
-            fprintf(stdout, "[error] Too many timings (%d) for timing buffer size (%d)!\n",
-                    __COUNTER__, MaxEntries);
+            f64 PercentWithChildren = 100.0 * ((f64)Anchor->TimeElapsedInclusive / (f64)TotalTime);
+            printf(", %.2f%% w/children", PercentWithChildren);
         }
-        else
+        printf(")\n");
+    }
+
+    void PrintTimings()
+    {
+        u64 CPUFreq = EstimateCPUFreq();
+
+        u64 TotalTime = TotalEnd - TotalBegin;
+
+        if (CPUFreq)
         {
-            u64 CPUFreq = EstimateCPUFreq();
+            printf("\nTotal time: %0.4fms (CPU freq %llu)\n", 1000.0 * (f64)TotalTime / (f64)CPUFreq, CPUFreq);
+        }
 
-            f64 TotalTime = (f64)(TotalEnd - TotalBegin) / (f64)CPUFreq * 1000.0;
-
-            fprintf(stdout, "BEGIN PRINT TIMINGS:\n");
-            for (int Idx = 1; Idx < MaxEntries; Idx++)
+        for (int Idx = 0; Idx < MaxAnchors; Idx++)
+        {
+            ProfileAnchor* Anchor = Anchors + Idx;
+            if (Anchor->TimeElapsedInclusive)
             {
-                if (!Entries[Idx].Name || !Entries[Idx].HitCount) { continue; }
-
-                f64 EntryTime = (f64)(Entries[Idx].Time - Entries[Idx].TimeChildren) / (f64)CPUFreq * 1000.0f;
-                f64 EntryPercent = (f64)EntryTime / TotalTime * 100.0;
-
-                fprintf(stdout, "\t%s[%u]: %.04f ms (%.02f%%)\n",
-                        Entries[Idx].Name, Entries[Idx].HitCount,
-                        EntryTime, EntryPercent);
-                if (Entries[Idx].TimeChildren)
-                {
-                    f64 ChildrenTime = (f64)Entries[Idx].TimeChildren / (f64)CPUFreq * 1000.0f;
-                    f64 ChildrenPercent = (f64)ChildrenTime / TotalTime * 100.0;
-                    fprintf(stdout, "\t\tChildren: %.04f ms (%.02f%%)\n",
-                            ChildrenTime, ChildrenPercent);
-
-                }
+                PrintAnchor(TotalTime, Anchor);
             }
-            fprintf(stdout, ":END PRINT TIMINGS\n");
         }
     }
 #endif // ENABLE_PROFILER
@@ -162,12 +147,14 @@ namespace Perf
         if (bProfiling)
         {
             TotalEnd = ReadCPUTimer();
+#if ENABLE_PROFILER
+            PrintTimings();
+#else
             u64 CPUFreq = EstimateCPUFreq();
             f64 TotalTime = (f64)(TotalEnd - TotalBegin) / (f64)CPUFreq * 1000.0;
             fprintf(stdout, "\t[Total]: %.04f ms\n", TotalTime);
-#if ENABLE_PROFILER
-            PrintTimings(Entries);
 #endif // ENABLE_PROFILER
+
             bProfiling = false;
         }
     }

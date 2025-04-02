@@ -14,22 +14,23 @@ namespace Perf
     u64 ReadCPUTimer();
     u64 EstimateCPUFreq();
 
-    struct ProfileEntry
+    struct ProfileAnchor
     {
         const char* Name;
-        u32 HitCount;
-        bool bActive;
-        u64 Time;
-        u64 TimeChildren;
+        u64 HitCount;
+        u64 TimeElapsedExclusive; // Does NOT include children
+        u64 TimeElapsedInclusive; // Does include children
     };
 
     struct ScopedTiming
     {
-        int EntryIdx;
-        int ParentIdx;
-        u64 Begin;
+        const char* Name;
+        u64 OldTimeElapsedInclusive;
+        u64 StartTime;
+        u32 ParentIndex;
+        u32 Index;
 
-        ScopedTiming(const char* InName, int Index);
+        ScopedTiming(const char* Name_, int Index_);
         ~ScopedTiming();
     };
 
@@ -40,8 +41,8 @@ namespace Perf
 #define PROFILING_BEGIN() Perf::BeginProfiling()
 #define PROFILING_END() Perf::EndProfiling()
 #if ENABLE_PROFILER
-#define TIME_FUNC() Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__);
-#define TIME_BLOCK(name) Perf::ScopedTiming _ST_##name(#name, __COUNTER__);
+#define TIME_FUNC() Perf::ScopedTiming _ST_##__func__(__func__, __COUNTER__ + 1);
+#define TIME_BLOCK(name) Perf::ScopedTiming _ST_##name(#name, __COUNTER__ + 1);
 #else
 #define TIME_FUNC() (void)0
 #define TIME_BLOCK(name) (void)0
