@@ -18,19 +18,17 @@ constexpr int DefaultSeed = 156208;
 
 int main(int ArgCount, const char* ArgValues[])
 {
-    PROFILING_BEGIN();
-
     MainExecParams ExecParams = ParseCmdLine(ArgCount, ArgValues);
     if (ExecParams.Type != MainExecType::Error)
     {
+        PROFILING_BEGIN();
         Main_Exec(&ExecParams);
+        PROFILING_END();
     }
     else
     {
         PrintProgramUsage(ArgValues[0]);
     }
-
-    PROFILING_END();
 }
 
 #if ENABLE_PROFILER

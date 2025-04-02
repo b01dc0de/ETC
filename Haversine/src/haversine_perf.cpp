@@ -106,14 +106,28 @@ namespace Perf
 
     void PrintAnchor(u64 TotalTime, u64 Freq, ProfileAnchor* Anchor)
     {
+        fprintf(stdout, "    %s[%llu]: ", Anchor->Name, Anchor->HitCount);
+        constexpr bool bPrintMilliseconds = true;
+        if (bPrintMilliseconds)
+        {
+            f64 ExclusiveMs = 1000.0 * (f64)Anchor->TimeElapsedExclusive / (f64)Freq;
+            fprintf(stdout, "%0.4f ms ", ExclusiveMs);
+        }
+        else
+        {
+            fprintf(stdout, "%llu cycles ", Anchor->TimeElapsedExclusive);
+        }
+
         f64 Percent = 100.0 * ((f64)Anchor->TimeElapsedExclusive / (f64)TotalTime);
-        fprintf(stdout, "    %s[%llu]: %llu (%.2f%%", Anchor->Name, Anchor->HitCount, Anchor->TimeElapsedExclusive, Percent);
         if (Anchor->TimeElapsedInclusive != Anchor->TimeElapsedExclusive)
         {
             f64 PercentWithChildren = 100.0 * ((f64)Anchor->TimeElapsedInclusive / (f64)TotalTime);
-            fprintf(stdout, ", %.2f%% w/children", PercentWithChildren);
+            fprintf(stdout, "(%.2f%%, %.2f%% w/children)", Percent, PercentWithChildren);
         }
-        fprintf(stdout, ")");
+        else
+        {
+            fprintf(stdout, "(%.2f%%)", Percent);
+        }
 
         if (Anchor->BytesProcessed)
         {
@@ -126,7 +140,7 @@ namespace Perf
             f64 GigabytesProcessedPerSecond = BytesPerSecond / Gigabyte;
 
             f64 MilliSeconds = (f64)Anchor->TimeElapsedInclusive / (f64)Freq * 1000.0;
-            fprintf(stdout, "    %.3fmb at %.2fgb/s    (%.4fseconds)\n", MegabytesProcessed, GigabytesProcessedPerSecond, MilliSeconds);
+            fprintf(stdout, "    %.3fmb at %.2fgb/s\n", MegabytesProcessed, GigabytesProcessedPerSecond);
         }
         fprintf(stdout, "\n");
     }
