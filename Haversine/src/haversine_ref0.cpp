@@ -94,12 +94,16 @@ HList Haversine_Ref0::GenerateDataUniform(int Seed, int Count)
         Result.Data[PairIdx].Y1 = coordy_dist(default_rand_engine);
     }
 
-    fprintf(stdout, "Generated Pair data - Uniform - Count: %d, Seed: %d\n",
-            Count, Seed);
     PrintData(Result);
 
-    f64 Average = CalculateAverage(Result);
-    printf("Average: %f\n", Average);
+    constexpr bool bVerboseDebugPrint = false;
+    if (bVerboseDebugPrint)
+    {
+        fprintf(stdout, "Generated Pair data - Uniform - Count: %d, Seed: %d\n",
+                Count, Seed);
+        f64 Average = CalculateAverage(Result);
+        fprintf(stdout, "Average: %f\n", Average);
+    }
 
     return Result;
 }
@@ -138,13 +142,17 @@ HList Haversine_Ref0::GenerateDataClustered(int Seed, int Count)
         Result.Data[PairIdx].Y1 = Clusters[ClusterIdx].Y1 + clusteroffsety_dist(default_rand_engine);
     }
 
-    fprintf(stdout, "Generated Pair data - Clustered - Count: %d, Seed: %d\n",
-            Count, Seed);
-    constexpr bool bPrintGeneratedData = false;
-    if (bPrintGeneratedData) { PrintData(Result); }
+    constexpr bool bVerboseDebugPrint = false;
+    if (bVerboseDebugPrint)
+    {
+        fprintf(stdout, "Generated Pair data - Clustered - Count: %d, Seed: %d\n",
+                Count, Seed);
+        constexpr bool bPrintGeneratedData = false;
+        if (bPrintGeneratedData) { PrintData(Result); }
 
-    double Average = CalculateAverage(Result);
-    printf("Average: %f\n", Average);
+        double Average = CalculateAverage(Result);
+        printf("Average: %f\n", Average);
+    }
 
     return Result;
 }
@@ -970,41 +978,69 @@ void PrintDebugPerfTimeStep(u64 TimeEnd, u64 TimeBegin, f64 TotalSeconds, u64 Fr
     fprintf(stdout, "%s: Took %.06f ms\t(%.02f %% overall)\n", StepName, TimeS * 1000.0f, TimeS / TotalSeconds * 100.0f);
 };
 
-void Haversine_Ref0::DemoPipeline(int Seed, int Count, bool bClustered)
+void Haversine_Ref0::GetInputDataFileName(char* Buffer, int BufferSize, int Seed, int Count, bool bClustered)
 {
-    using namespace Haversine_Ref0_Helpers;
-
-    static constexpr int FileNameMaxSize = 64;
-    char JSONFileName[FileNameMaxSize];
-
-    HList PairList = {};
-
     if (bClustered)
     {
-        PairList = Haversine_Ref0::GenerateDataClustered(Seed, Count);
-        (void)sprintf_s(JSONFileName, "output_seed%d_count%d_clusters%d.json",
-                Seed, Count, DefaultClusterCount);
+        (void)sprintf_s(Buffer, BufferSize, "hvpairs_seed%d_count%d_clustered.json", Seed, Count);
     }
     else
     {
-        PairList = Haversine_Ref0::GenerateDataUniform(Seed, Count);
-        (void)sprintf_s(JSONFileName, "output_seed%d_count%d_u.json",
-                Seed, Count);
+        (void)sprintf_s(Buffer, BufferSize, "hvpairs_seed%d_count%d_uniform.json", Seed, Count);
     }
+}
+
+void Haversine_Ref0::Gen(int Seed, int Count, bool bClustered)
+{
+    TIME_FUNC();
+
+    static constexpr int FileNameMaxSize = 96;
+    char JSONFileName[FileNameMaxSize];
+    GetInputDataFileName(JSONFileName, FileNameMaxSize, Seed, Count, bClustered);
+
+    HList PairList = {};
+
+    if (bClustered) { PairList = Haversine_Ref0::GenerateDataClustered(Seed, Count); }
+    else { PairList = Haversine_Ref0::GenerateDataUniform(Seed, Count); }
 
     Haversine_Ref0::WriteDataAsJSON(PairList, JSONFileName);
-    fprintf(stdout, "Wrote data to file %s\n", JSONFileName); 
+    fprintf(stdout, "Wrote JSON data to file %s\n", JSONFileName); 
 
-    HList ParsedPairs = Haversine_Ref0::ReadFileAsJSON(JSONFileName);
-    fprintf(stdout, "Calculating Haversine Average on parsed JSON file (%s) list of size %d:\n", JSONFileName, ParsedPairs.Count);
+    f64 HvAvg = Haversine_Ref0::CalculateAverage(PairList);
+    fprintf(stdout, "\tAverage for generated data: %f\n", HvAvg);
 
-    f64 HvAvg = Haversine_Ref0::CalculateAverage(ParsedPairs);
+    {
+        TIME_BLOCK(Gen_Cleanup);
+        delete[] PairList.Data;
+    }
+}
+
+void Haversine_Ref0::Calc(int Seed, int Count, bool bClustered)
+{
+    using namespace Haversine_Ref0_Helpers;
+
+    TIME_FUNC();
+
+    static constexpr int FileNameMaxSize = 96;
+    char JSONFileName[FileNameMaxSize];
+    GetInputDataFileName(JSONFileName, FileNameMaxSize, Seed, Count, bClustered);
+
+    HList PairList = ReadFileAsJSON(JSONFileName);
+    //fprintf(stdout, "Calculating Haversine Average on parsed JSON file (%s) list of size %d:\n", JSONFileName, PairList.Count);
+
+    f64 HvAvg = CalculateAverage(PairList);
     fprintf(stdout, "\tAverage: %f\n", HvAvg);
 
     {
-        TIME_BLOCK(Cleanup);
+        TIME_BLOCK(Calc_Cleanup);
         delete[] PairList.Data;
-        delete[] ParsedPairs.Data;
     }
+}
+
+void Haversine_Ref0::Full(int Seed, int Count, bool bClustered)
+{
+    Gen(Seed, Count, bClustered);
+
+    Calc(Seed, Count, bClustered);
 }
 

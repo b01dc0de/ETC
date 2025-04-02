@@ -35,7 +35,11 @@ namespace Haversine_Ref0
     HList ReadFileAsJSON(const char* FileName);
     HList ParseJSON(FileContentsT& InputFile);
 
-    void DemoPipeline(int Seed, int Count, bool bClustered);
+    void GetInputDataFileName(char* Buffer, int BufferSize, int Seed, int Count, bool bClustered);
+
+    void Gen(int Seed, int Count, bool bClustered);
+    void Calc(int Seed, int Count, bool bClustered);
+    void Full(int Seed, int Count, bool bClustered);
 
     template <typename T>
     struct DynamicArray

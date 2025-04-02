@@ -147,7 +147,7 @@ namespace Perf
         if (CPUFreq)
         {
             f64 CPUFreq_GHz = (f64)CPUFreq / (1000.0 * 1000.0 * 1000.0);
-            fprintf(stdout, "\nTotal time: %0.4fms (CPU freq %llu    ~%.2f GHz)\n", 1000.0 * (f64)TotalTime / (f64)CPUFreq, CPUFreq, CPUFreq_GHz);
+            fprintf(stdout, "\nTotal time: %0.4fms (CPU freq: %llu / ~%.2f GHz)\n", 1000.0 * (f64)TotalTime / (f64)CPUFreq, CPUFreq, CPUFreq_GHz);
         }
 #if ENABLE_PROFILER
         for (int Idx = 0; Idx < MaxAnchors; Idx++)
