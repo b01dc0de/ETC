@@ -7,76 +7,66 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 
-struct BitmapFile
+void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
 {
-    BITMAPFILEHEADER FileHeader;
-    BITMAPINFOHEADER InfoHeader;
-};
+    BITMAP bmp;
+    GetObject(hBitmap, sizeof(BITMAP), (LPSTR)&bmp);
 
-void WriteBMP()
-{
-    // TODO: Map this to the HBITMAP that we write the text out to
-    int Width = 256;
-    int Height = 256;
-    int BytesPerPixel = 4;
-    int NumPixels = Width * Height;
-    int PixelByteCount = NumPixels * BytesPerPixel;
-    BYTE* PixelData = new BYTE[PixelByteCount];
+    int Width = bmp.bmWidth;
+    int Height = bmp.bmHeight;
+    int BitCount = bmp.bmBitsPixel;
+
+    if (bmp.bmPlanes != 1 || (BitCount != 24 && BitCount != 32))
+    {
+        fprintf(stdout, "[error] Unexpected bitmap format!\n"
+                "BitCount: %d\n", BitCount);
+        return;
+    }
+
+    int TotalPixels = bmp.bmWidth * bmp.bmHeight;
+    int PixelByteCount = 
+        bmp.bmBitsPixel == 24 ? TotalPixels * 3 :
+        bmp.bmBitsPixel == 32 ? TotalPixels * 4 :
+        0;
+    if (PixelByteCount % 4 != 0) { PixelByteCount += 4 - (PixelByteCount % 4); }
+
+    BYTE* pBits = new BYTE[PixelByteCount];
+
+    BITMAPINFO Info = {};
+    Info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    Info.bmiHeader.biWidth = Width;
+    Info.bmiHeader.biHeight = Height;
+    Info.bmiHeader.biPlanes = bmp.bmPlanes;
+    Info.bmiHeader.biBitCount = BitCount;
+    Info.bmiHeader.biCompression = BI_RGB;
+    Info.bmiHeader.biSizeImage = PixelByteCount;
+
+    bool bSuccess = GetDIBits(
+        hDeviceContext,
+        hBitmap,
+        0,
+        bmp.bmHeight,
+        pBits,
+        &Info,
+        DIB_RGB_COLORS
+    );
+    if (!bSuccess)
+    {
+        fprintf(stdout, "[error] GetDIBits error!\n");
+    }
+    else
+    {
+        fprintf(stdout, "GetDIBits SUCCESS!\n");
+    }
+
+    BITMAPFILEHEADER FileHeader = {};
+    BITMAPINFOHEADER InfoHeader = Info.bmiHeader;
 
     int TotalHeadersSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-    int TotalFileSize = TotalHeadersSize + PixelByteCount;
 
-    BitmapFile BitmapToWrite = {};
-    {
-        // Init FileHeader
-        BitmapToWrite.FileHeader.bfType = 0x4D42; // ASCII "BM"
-        BitmapToWrite.FileHeader.bfSize = TotalHeadersSize + PixelByteCount;
-        BitmapToWrite.FileHeader.bfOffBits = TotalHeadersSize;
-        // Init InfoHeader
-        BitmapToWrite.InfoHeader.biSize = sizeof(BITMAPINFOHEADER);
-        BitmapToWrite.InfoHeader.biWidth = Width;
-        BitmapToWrite.InfoHeader.biHeight = -Height;
-        BitmapToWrite.InfoHeader.biPlanes = 1;
-        BitmapToWrite.InfoHeader.biBitCount = 32;
-        BitmapToWrite.InfoHeader.biCompression = BI_RGB;
-        // Init PixelData
-        for (int PxIdx = 0; PxIdx < NumPixels; PxIdx ++)
-        {
-            // Pixel format: BB GG RR AA
-            int CurrRow = PxIdx / Width;
-            int CurrCol = PxIdx % Width;
-
-            unsigned int* Pixel = ((unsigned int*)PixelData) + PxIdx;
-
-            BYTE Red = 0;
-            BYTE Green = 0;
-            BYTE Blue = 0;
-            BYTE Alpha = 0xFF;
-
-            if (CurrRow == 0 && CurrCol == 0)
-            {
-                Red = 0xFF;
-            }
-            else if (CurrRow == 0 && CurrCol == Width - 1)
-            {
-                Green = 0xFF;
-            }
-            else if (CurrRow == Height - 1 && CurrCol == 0)
-            {
-                Blue = 0xFF;
-            }
-            else 
-            {
-                Red = (BYTE)CurrCol;
-                Blue = (BYTE)CurrRow;
-                Green = (BYTE)((float)PxIdx / NumPixels * 255.0f);
-            }
-
-            unsigned int OutValue = Alpha << 24 |
-                Red << 16 | Green << 8 | Blue << 0;
-            *Pixel = OutValue;
-        }
-    }
+    FileHeader.bfType = 0x4D42; // ASCII "BM"
+    FileHeader.bfSize = TotalHeadersSize + PixelByteCount;
+    FileHeader.bfOffBits = TotalHeadersSize;
 
     const char* OutFileName = "test_out.bmp";
     HANDLE FileHandle = CreateFileA(
@@ -94,7 +84,7 @@ void WriteBMP()
         DWORD BytesWritten = 0;
         bool bSuccess = WriteFile(
             FileHandle,
-            &BitmapToWrite.FileHeader,
+            &FileHeader,
             sizeof(BITMAPFILEHEADER),
             &BytesWritten,
             nullptr
@@ -104,7 +94,7 @@ void WriteBMP()
         {
             bSuccess = WriteFile(
                 FileHandle,
-                &BitmapToWrite.InfoHeader,
+                &InfoHeader,
                 sizeof(BITMAPINFOHEADER),
                 &BytesWritten,
                 nullptr
@@ -115,7 +105,7 @@ void WriteBMP()
         {
             bSuccess = WriteFile(
                 FileHandle,
-                PixelData,
+                pBits,
                 PixelByteCount,
                 &BytesWritten,
                 nullptr
@@ -197,15 +187,9 @@ int main(int ArgCount, const char* ArgValues[])
     int NumGlyphs = GlyphRows * GlyphCols;
     int BytesPerPixel = 4;
 
-    BITMAP BitmapDesc = {};
-    BitmapDesc.bmType = 0;
-    BitmapDesc.bmWidth = GlyphWidth * GlyphCols;
-    BitmapDesc.bmHeight = GlyphHeight * GlyphRows;
-    BitmapDesc.bmWidthBytes = BitmapDesc.bmWidth * BytesPerPixel;
-    BitmapDesc.bmPlanes = 1;
-    BitmapDesc.bmBitsPixel = BytesPerPixel * 8;
-    BitmapDesc.bmBits = nullptr; // TODO:
-    HBITMAP BitmapHandle = CreateBitmapIndirect(&BitmapDesc);
+    int Width = GlyphWidth * GlyphCols;
+    int Height = GlyphHeight * GlyphRows;
+    HBITMAP BitmapHandle = CreateCompatibleBitmap(hDeviceContext, Width, Height);
 
     HGDIOBJ hOldFont = nullptr;
     HGDIOBJ hOldBitmap = nullptr;
@@ -215,9 +199,11 @@ int main(int ArgCount, const char* ArgValues[])
 
     if (hOldFont && hOldFont != HGDI_ERROR && hOldBitmap && hOldBitmap != HGDI_ERROR)
     {
-        if (TextOutA(hDeviceContext, 0, 0, "ABCD", 4))
+        if (TextOutA(hMemoryDC, 0, 0, "ABCD", 4))
         {
             fprintf(stdout, "TestOutA succeeded!\n");
+
+            WriteBMP(hMemoryDC, BitmapHandle);
         }
         else
         {
@@ -228,8 +214,5 @@ int main(int ArgCount, const char* ArgValues[])
     {
         fprintf(stdout, "SelectObject FAILED! :(\n");
     }
-
-    WriteBMP();
-
 }
 
