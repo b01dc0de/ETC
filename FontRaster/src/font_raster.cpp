@@ -164,6 +164,107 @@ void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap, char* FileName)
     }
 }
 
+void PostProcessFontBMP(char* FileName)
+{
+    HANDLE FileHandle = CreateFileA(
+        FileName,
+        GENERIC_READ,
+        0,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+
+    if (!FileHandle) { return; }
+
+    int FileSize = GetFileSize(FileHandle, nullptr);
+
+    BYTE* FileContents = new BYTE[FileSize];
+    DWORD BytesRead = 0;
+
+    if (!ReadFile(FileHandle, FileContents,
+        FileSize, &BytesRead, nullptr) ||
+        BytesRead != FileSize)
+    {
+        delete[] FileContents;
+        return;
+    }
+    CloseHandle(FileHandle);
+
+    BITMAPFILEHEADER FileHeader = *(BITMAPFILEHEADER*)FileContents;
+    BITMAPINFOHEADER InfoHeader = *(BITMAPINFOHEADER*)(FileContents + sizeof(BITMAPFILEHEADER));
+
+    if (InfoHeader.biBitCount != 32) { return; }
+
+    int PixelDataBytes = FileSize - sizeof(BITMAPFILEHEADER) - sizeof(BITMAPINFOHEADER);
+    UINT *PixelData = (UINT*)(FileContents + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
+    
+    BYTE* ProcessedPixels = new BYTE[PixelDataBytes];
+
+    int NumPixels = InfoHeader.biWidth * InfoHeader.biHeight;
+    for (int PxIdx = 0; PxIdx < NumPixels; PxIdx++)
+    {
+        UINT* CurrPx = PixelData + PxIdx;
+        BYTE Red = (*CurrPx & 0x00FF0000) >> 16;
+        BYTE Green = (*CurrPx & 0x0000FF00) >> 8;
+        BYTE Blue = (*CurrPx & 0x000000FF) >> 0;
+        BYTE Alpha = (*CurrPx & 0xFF000000) >> 24;
+
+        BYTE MaxRGB = (Red > Green) ? (Red > Blue ? Red : Blue)
+            : (Green > Blue ? Green : Blue);
+        Red = MaxRGB;
+        Green = MaxRGB;
+        Blue = MaxRGB;
+        Alpha = MaxRGB;
+        
+        UINT* OutPx = (UINT*)(ProcessedPixels + (PxIdx * 4));
+        UINT OutRGB = Alpha << 24 | Red << 16 | Green << 8 | Blue << 0;
+        *OutPx = OutRGB;
+    }
+
+    char OutFileName[256];
+    sprintf(OutFileName, "postprocess_%s", FileName);
+    HANDLE OutBitmapFileHandle = CreateFileA(
+        OutFileName,
+        GENERIC_WRITE,
+        0,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+    if (!OutBitmapFileHandle) { return; }
+
+    WriteFile(
+        OutBitmapFileHandle,
+        &FileHeader,
+        sizeof(BITMAPFILEHEADER),
+        nullptr,
+        nullptr
+    );
+    WriteFile(
+        OutBitmapFileHandle,
+        &InfoHeader,
+        sizeof(BITMAPINFOHEADER),
+        nullptr,
+        nullptr
+    );
+    WriteFile(
+        OutBitmapFileHandle,
+        ProcessedPixels,
+        PixelDataBytes,
+        nullptr,
+        nullptr
+    );
+
+    fprintf(stdout, "Wrote processed file to %s\n", OutFileName);
+
+    CloseHandle(OutBitmapFileHandle);
+    delete[] FileContents;
+    delete[] ProcessedPixels;
+}
+
 HFONT DialogChooseFont(FontDesc* OutDesc)
 {
     LOGFONT LogFontDesc = {};
@@ -180,11 +281,14 @@ HFONT DialogChooseFont(FontDesc* OutDesc)
     FontChoiceDesc.lStructSize = sizeof(CHOOSEFONT);
     FontChoiceDesc.lpLogFont = &LogFontDesc;
     FontChoiceDesc.Flags =
-        CF_NOVERTFONTS|CF_SELECTSCRIPT|
-        CF_FIXEDPITCHONLY|CF_FORCEFONTEXIST|
-        CF_NOSTYLESEL;
+        CF_INITTOLOGFONTSTRUCT|CF_NOVERTFONTS|CF_SELECTSCRIPT|
+        CF_FIXEDPITCHONLY|CF_FORCEFONTEXIST|CF_NOSTYLESEL;
 
-    ChooseFontA(&FontChoiceDesc);
+    if (!ChooseFontA(&FontChoiceDesc))
+    {
+        fprintf(stdout, "ChooseFont dialog was canceled... aborting.\n");
+        return nullptr;
+    }
 
     HFONT FontHandle = CreateFontIndirectA(FontChoiceDesc.lpLogFont);
     if (FontHandle)
@@ -262,5 +366,7 @@ int main(int ArgCount, const char* ArgValues[])
     char OutputFileName[256];
     GetOutputFontFileName(OutputFileName, &ChosenFontDesc);
     WriteBMP(hMemoryDC, BitmapHandle, OutputFileName);
+
+    PostProcessFontBMP(OutputFileName);
 }
 
