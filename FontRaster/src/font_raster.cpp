@@ -154,65 +154,64 @@ HFONT DialogChooseFont()
     return FontHandle;
 }
 
+#define MAIN_ERRCHK(Exp, FuncName) if ((Exp)) { fprintf(stdout, "[error] %s failed!\n", #FuncName); return 1; }
+
 int main(int ArgCount, const char* ArgValues[])
 {
-    HDC hDeviceContext = nullptr;
-    hDeviceContext = GetWindowDC(nullptr);
-
-    if (0)
-    {
-#define PRINTCAPS(Value, CmpVal) if ((Value) & (CmpVal)) { fprintf(stdout, "\t" #CmpVal "\n"); }
-        int RasterCaps = GetDeviceCaps(hDeviceContext, RASTERCAPS);
-        fprintf(stdout, "Device Context RASTERCAPS:\n");
-        PRINTCAPS(RasterCaps, RC_BITBLT);
-        PRINTCAPS(RasterCaps, RC_BANDING);
-        PRINTCAPS(RasterCaps, RC_SCALING);
-        PRINTCAPS(RasterCaps, RC_BITMAP64);
-        PRINTCAPS(RasterCaps, RC_DI_BITMAP);
-        PRINTCAPS(RasterCaps, RC_PALETTE);
-        PRINTCAPS(RasterCaps, RC_DIBTODEV);
-        PRINTCAPS(RasterCaps, RC_STRETCHBLT);
-        PRINTCAPS(RasterCaps, RC_FLOODFILL);
-        PRINTCAPS(RasterCaps, RC_STRETCHDIB);
-    }
-
-    HDC hMemoryDC = nullptr;
-    hMemoryDC = CreateCompatibleDC(hDeviceContext);
+    HDC hDeviceContext = GetWindowDC(nullptr);
+    HDC hMemoryDC = CreateCompatibleDC(hDeviceContext);
 
     HFONT FontHandle = DialogChooseFont();
-    int GlyphWidth = 12; // TODO:
-    int GlyphHeight = 24; // TODO:
-    int GlyphRows = 16;
-    int GlyphCols = 16;
-    int NumGlyphs = GlyphRows * GlyphCols;
-    int BytesPerPixel = 4;
+    MAIN_ERRCHK(FontHandle == nullptr, DialogChooseFont);
 
-    int Width = GlyphWidth * GlyphCols;
-    int Height = GlyphHeight * GlyphRows;
-    HBITMAP BitmapHandle = CreateCompatibleBitmap(hDeviceContext, Width, Height);
+    HGDIOBJ hOldFont = SelectObject(hMemoryDC, FontHandle);
+    MAIN_ERRCHK(!hOldFont || hOldFont == HGDI_ERROR, SelectObject__Font);
 
-    HGDIOBJ hOldFont = nullptr;
-    HGDIOBJ hOldBitmap = nullptr;
+    TEXTMETRICA FontMetrics = {};
+    MAIN_ERRCHK(!GetTextMetricsA(hMemoryDC, &FontMetrics), GetTextMetrics);
+    bool bFixedWidth = !(FontMetrics.tmPitchAndFamily & TMPF_FIXED_PITCH);
 
-    hOldFont = SelectObject(hMemoryDC, FontHandle);
-    hOldBitmap = SelectObject(hMemoryDC, BitmapHandle);
+    int GlyphWidth = FontMetrics.tmAveCharWidth;//FontMetrics.tmMaxCharWidth;
+    int GlyphHeight = FontMetrics.tmHeight;
+    int GlyphsPerRow = 16;
+    int NumRows = 16;
+    int NumGlyphs = GlyphsPerRow * NumRows;
 
-    if (hOldFont && hOldFont != HGDI_ERROR && hOldBitmap && hOldBitmap != HGDI_ERROR)
+    char FontName[256];
+    GetTextFaceA(hMemoryDC, 256, FontName);
+
+    int BitmapWidth = GlyphWidth * GlyphsPerRow;
+    int BitmapHeight = GlyphHeight * NumRows;
+    HBITMAP BitmapHandle = CreateCompatibleBitmap(hDeviceContext, BitmapWidth, BitmapHeight);
+
+    HGDIOBJ hOldBitmap = SelectObject(hMemoryDC, BitmapHandle);
+    MAIN_ERRCHK(!hOldBitmap || hOldBitmap == HGDI_ERROR, SelectObject__Bitmap);
+
+    COLORREF ColorWhite = RGB(0xFF, 0xFF, 0xFF);
+    COLORREF ColorBlack = RGB(0, 0, 0);
+    COLORREF ColorResult = SetBkColor(hMemoryDC, ColorBlack);
+    MAIN_ERRCHK(ColorResult == CLR_INVALID, SetBkColor);
+    ColorResult = SetTextColor(hMemoryDC, ColorWhite);
+    MAIN_ERRCHK(ColorResult == CLR_INVALID, SetTextColor);
+
+    // Write glyphs to bitmap
     {
-        if (TextOutA(hMemoryDC, 0, 0, "ABCD", 4))
+        char GlyphMap[256];
+        for (int GlyphIdx = 0; GlyphIdx < 256; GlyphIdx++)
         {
-            fprintf(stdout, "TestOutA succeeded!\n");
+            GlyphMap = (char)GlyphIdx;
+        }
+        GlyphMap[127] = ' '; // [127] == DEL char
 
-            WriteBMP(hMemoryDC, BitmapHandle);
-        }
-        else
+        // Skip first two rows, [0, 32] == control chars
+        for (int RowIdx = 2; RowIdx < NumRows; RowIdx++)
         {
-            fprintf(stdout, "TestOutA FAILED! :(\n");
+            int RowY = GlyphHeight * RowIdx;
+            char* StartGlyph = CharValues + (GlyphsPerRow * RowIdx);
+            TextOutA(hMemoryDC, 0, RowY, StartGlyph, GlyphsPerRow);
         }
+        WriteBMP(hMemoryDC, BitmapHandle);
     }
-    else
-    {
-        fprintf(stdout, "SelectObject FAILED! :(\n");
-    }
+
 }
 
