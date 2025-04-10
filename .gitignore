@@ -1,5 +1,8 @@
 .vs/
 build/
 
+FontRaster/*.bmp
+
 Haversine/output*.f64
 Haversine/output*.json
+
