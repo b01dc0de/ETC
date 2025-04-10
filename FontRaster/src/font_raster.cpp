@@ -7,7 +7,56 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 
-void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
+struct FontDesc
+{
+    char Name[LF_FACESIZE];
+    int Pt;
+    int Weight;
+    bool bItalic;
+};
+
+void GetOutputFontFileName(char* OutputFileName, FontDesc* Desc)
+{
+    constexpr int MaxIdx = 255;
+
+    int ReadIdx = 0;
+    int WriteIdx = 0;
+    while (ReadIdx < MaxIdx && Desc->Name[ReadIdx])
+    {
+        if (Desc->Name[ReadIdx] != ' ')
+        {
+            OutputFileName[WriteIdx++] = Desc->Name[ReadIdx];
+        }
+        ReadIdx++;
+    }
+
+    WriteIdx += sprintf(OutputFileName + WriteIdx, "_%dpt", Desc->Pt);
+
+    const char* WeightName = nullptr;
+    switch (Desc->Weight)
+    {
+        case FW_THIN: WeightName = "_Thin"; break;
+        case FW_EXTRALIGHT: WeightName = "_ExtraLight"; break;
+        case FW_LIGHT: WeightName = "_Light"; break;
+        case FW_REGULAR: break;
+        case FW_MEDIUM: WeightName = "_Medium"; break;
+        case FW_SEMIBOLD: WeightName = "_SemiBold"; break;
+        case FW_BOLD: WeightName = "_Bold"; break;
+        case FW_EXTRABOLD: WeightName = "_ExtraBold"; break;
+        case FW_HEAVY: WeightName = "_Heavy"; break;
+    }
+    if (WeightName)
+    {
+        WriteIdx += sprintf(OutputFileName + WriteIdx, WeightName);
+    }
+    if (Desc->bItalic)
+    {
+        WriteIdx += sprintf(OutputFileName + WriteIdx, "_italic");
+    }
+    WriteIdx += sprintf(OutputFileName + WriteIdx, ".bmp");
+}
+
+void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap, char* FileName)
 {
     BITMAP bmp;
     GetObject(hBitmap, sizeof(BITMAP), (LPSTR)&bmp);
@@ -41,7 +90,7 @@ void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
     Info.bmiHeader.biCompression = BI_RGB;
     Info.bmiHeader.biSizeImage = PixelByteCount;
 
-    bool bSuccess = GetDIBits(
+    GetDIBits(
         hDeviceContext,
         hBitmap,
         0,
@@ -50,14 +99,6 @@ void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
         &Info,
         DIB_RGB_COLORS
     );
-    if (!bSuccess)
-    {
-        fprintf(stdout, "[error] GetDIBits error!\n");
-    }
-    else
-    {
-        fprintf(stdout, "GetDIBits SUCCESS!\n");
-    }
 
     BITMAPFILEHEADER FileHeader = {};
     BITMAPINFOHEADER InfoHeader = Info.bmiHeader;
@@ -68,9 +109,8 @@ void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
     FileHeader.bfSize = TotalHeadersSize + PixelByteCount;
     FileHeader.bfOffBits = TotalHeadersSize;
 
-    const char* OutFileName = "test_out.bmp";
     HANDLE FileHandle = CreateFileA(
-        OutFileName,
+        FileName,
         GENERIC_WRITE,
         0,
         nullptr,
@@ -112,11 +152,7 @@ void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
             );
             TotalBytesWritten += BytesWritten;
         }
-        if (bSuccess)
-        {
-            fprintf(stdout, "Wrote BMP SUCCEEDED! :)\n");
-        }
-        else
+        if (!bSuccess)
         {
             fprintf(stdout, "[error] Write BMP FAILED! :(\n");
         }
@@ -128,7 +164,7 @@ void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap)
     }
 }
 
-HFONT DialogChooseFont()
+HFONT DialogChooseFont(FontDesc* OutDesc)
 {
     LOGFONT LogFontDesc = {};
     LogFontDesc.lfItalic = FALSE;
@@ -151,6 +187,13 @@ HFONT DialogChooseFont()
     ChooseFontA(&FontChoiceDesc);
 
     HFONT FontHandle = CreateFontIndirectA(FontChoiceDesc.lpLogFont);
+    if (FontHandle)
+    {
+        strcpy_s(OutDesc->Name, LF_FACESIZE, LogFontDesc.lfFaceName);
+        OutDesc->Pt = FontChoiceDesc.iPointSize / 10;
+        OutDesc->Weight = LogFontDesc.lfWeight;
+        OutDesc->bItalic = LogFontDesc.lfItalic;
+    }
     return FontHandle;
 }
 
@@ -161,7 +204,9 @@ int main(int ArgCount, const char* ArgValues[])
     HDC hDeviceContext = GetWindowDC(nullptr);
     HDC hMemoryDC = CreateCompatibleDC(hDeviceContext);
 
-    HFONT FontHandle = DialogChooseFont();
+    FontDesc ChosenFontDesc = {};
+
+    HFONT FontHandle = DialogChooseFont(&ChosenFontDesc);
     MAIN_ERRCHK(FontHandle == nullptr, DialogChooseFont);
 
     HGDIOBJ hOldFont = SelectObject(hMemoryDC, FontHandle);
@@ -171,11 +216,12 @@ int main(int ArgCount, const char* ArgValues[])
     MAIN_ERRCHK(!GetTextMetricsA(hMemoryDC, &FontMetrics), GetTextMetrics);
     bool bFixedWidth = !(FontMetrics.tmPitchAndFamily & TMPF_FIXED_PITCH);
 
-    int GlyphWidth = FontMetrics.tmAveCharWidth;//FontMetrics.tmMaxCharWidth;
+    int GlyphWidth = FontMetrics.tmAveCharWidth;
     int GlyphHeight = FontMetrics.tmHeight;
-    int GlyphsPerRow = 16;
-    int NumRows = 16;
-    int NumGlyphs = GlyphsPerRow * NumRows;
+    constexpr int GlyphsPerRow = 16;
+    constexpr int NumRows = 16;
+    constexpr int NumGlyphs = GlyphsPerRow * NumRows;
+    constexpr int FirstPrintableGlyph = 32;
 
     char FontName[256];
     GetTextFaceA(hMemoryDC, 256, FontName);
@@ -196,10 +242,10 @@ int main(int ArgCount, const char* ArgValues[])
 
     // Write glyphs to bitmap
     {
-        char GlyphMap[256];
-        for (int GlyphIdx = 0; GlyphIdx < 256; GlyphIdx++)
+        char GlyphMap[NumGlyphs];
+        for (int GlyphIdx = FirstPrintableGlyph; GlyphIdx < NumGlyphs; GlyphIdx++)
         {
-            GlyphMap = (char)GlyphIdx;
+            GlyphMap[GlyphIdx] = (char)GlyphIdx;
         }
         GlyphMap[127] = ' '; // [127] == DEL char
 
@@ -207,11 +253,14 @@ int main(int ArgCount, const char* ArgValues[])
         for (int RowIdx = 2; RowIdx < NumRows; RowIdx++)
         {
             int RowY = GlyphHeight * RowIdx;
-            char* StartGlyph = CharValues + (GlyphsPerRow * RowIdx);
+            char* StartGlyph = GlyphMap + (GlyphsPerRow * RowIdx);
             TextOutA(hMemoryDC, 0, RowY, StartGlyph, GlyphsPerRow);
         }
-        WriteBMP(hMemoryDC, BitmapHandle);
     }
 
+    // Write bitmap to file
+    char OutputFileName[256];
+    GetOutputFontFileName(OutputFileName, &ChosenFontDesc);
+    WriteBMP(hMemoryDC, BitmapHandle, OutputFileName);
 }
 
