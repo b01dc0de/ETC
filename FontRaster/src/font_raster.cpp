@@ -213,10 +213,21 @@ void PostProcessFontBMP(char* FileName)
 
         BYTE MaxRGB = (Red > Green) ? (Red > Blue ? Red : Blue)
             : (Green > Blue ? Green : Blue);
-        Red = MaxRGB;
-        Green = MaxRGB;
-        Blue = MaxRGB;
-        Alpha = MaxRGB;
+        constexpr BYTE CutoffValue = 0xFF / 2;
+        if (MaxRGB > CutoffValue)
+        {
+            Red = 0xFF;
+            Green = 0xFF;
+            Blue = 0xFF;
+            Alpha = MaxRGB;
+        }
+        else
+        {
+            Red = 0;
+            Green = 0;
+            Blue = 0;
+            Alpha = 0;
+        }
         
         UINT* OutPx = (UINT*)(ProcessedPixels + (PxIdx * 4));
         UINT OutRGB = Alpha << 24 | Red << 16 | Green << 8 | Blue << 0;
