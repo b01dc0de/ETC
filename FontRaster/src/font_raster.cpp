@@ -1,7 +1,4 @@
-// Std lib headers
-#include <stdio.h>
-// Platform headers
-#include <windows.h>
+#include "font_raster.h"
 
 #pragma comment(lib, "comdlg32.lib")
 #pragma comment(lib, "user32.lib")
@@ -56,12 +53,8 @@ int main(int ArgCount, const char* ArgValues[])
     HGDIOBJ hOldBitmap = SelectObject(hMemoryDC, BitmapHandle);
     MAIN_ERRCHK(!hOldBitmap || hOldBitmap == HGDI_ERROR, SelectObject__Bitmap);
 
-    COLORREF ColorWhite = RGB(0xFF, 0xFF, 0xFF);
-    COLORREF ColorBlack = RGB(0, 0, 0);
-    COLORREF ColorResult = SetBkColor(hMemoryDC, ColorBlack);
-    MAIN_ERRCHK(ColorResult == CLR_INVALID, SetBkColor);
-    ColorResult = SetTextColor(hMemoryDC, ColorWhite);
-    MAIN_ERRCHK(ColorResult == CLR_INVALID, SetTextColor);
+    MAIN_ERRCHK(SetBkColor(hMemoryDC, RGB(0, 0, 0)) == CLR_INVALID, SetBkColor);
+    MAIN_ERRCHK(SetTextColor(hMemoryDC, RGB(0xFF, 0xFF, 0xFF)) == CLR_INVALID, SetTextColor);
 
     // Write glyphs to bitmap
     {
@@ -86,7 +79,9 @@ int main(int ArgCount, const char* ArgValues[])
     GetOutputFontFileName(OutputFileName, &ChosenFontDesc);
     WriteBMP(hMemoryDC, BitmapHandle, OutputFileName);
 
+#if ENABLE_POSTPROCESS()
     PostProcessFontBMP(OutputFileName);
+#endif // ENABLE_POSTPROCESS()
 }
 
 HFONT DialogChooseFont(FontDesc* OutDesc)
@@ -237,7 +232,7 @@ void PostProcessFontBMP(char* FileName)
     }
 
     char OutFileName[256];
-    sprintf(OutFileName, "postprocess_%s", FileName);
+    sprintf(OutFileName, "post_%s", FileName);
     HANDLE OutBitmapFileHandle = CreateFileA(
         OutFileName,
         GENERIC_WRITE,
