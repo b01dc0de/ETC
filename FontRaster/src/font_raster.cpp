@@ -12,12 +12,12 @@ struct FontDesc
     bool bItalic;
 };
 
+#define ENABLE_POSTPROCESS() (0)
+
 HFONT DialogChooseFont(FontDesc* OutDesc);
 void GetOutputFontFileName(char* OutputFileName, FontDesc* Desc);
 void PostProcessFontBMP(char* FileName);
 void WriteBMP(HDC hDeviceContext, HBITMAP hBitmap, char* FileName);
-
-#define MAIN_ERRCHK(Exp, FuncName) if ((Exp)) { fprintf(stdout, "[error] %s failed!\n", #FuncName); return 1; }
 
 int main(int ArgCount, const char* ArgValues[])
 {

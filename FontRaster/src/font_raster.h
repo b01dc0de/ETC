@@ -28,4 +28,12 @@ using s64 = int64_t;
 using f32 = float;
 using f64 = double;
 
+#if DEBUG_BUILD()
+    #define DEBUG_BREAK() DebugBreak()
+#else // DEBUG_BUILD()
+    #define DEBUG_BREAK() (void)0
+#endif // DEBUG_BUILD()
+
+#define MAIN_ERRCHK(Exp, FuncName) if ((Exp)) { fprintf(stdout, "[error] %s failed!\n", #FuncName); DEBUG_BREAK(); return 1; }
+
 #endif // FONT_RASTER_H
