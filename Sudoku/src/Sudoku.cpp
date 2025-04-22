@@ -26,22 +26,21 @@ struct SudokuGrid
     static constexpr s32 MinVal = 1;
     static constexpr s32 MaxVal = 9;
 
-    u32 Grid[Size];
+    static std::random_device RandomDevice;
+    static std::mt19937 RandomGenerator;
 
-    u32 GetRandomGridCellIdx()
+    s32 Grid[Size];
+
+    s32 RandomCellIdx()
     {
-        static std::random_device RandomDevice;
-        static std::mt19937 MersenneTwisterGenerator(RandomDevice());
-        static std::uniform_int_distribution<> CellIdxDistrib(0, Size - 1);
-        return CellIdxDistrib(MersenneTwisterGenerator);
+        static std::uniform_int_distribution<> Distrib(0, Size - 1); // [0, 80]
+        return Distrib(RandomGenerator);
     }
 
-    s32 GetRandomSudokuValue()
+    s32 RandomValue()
     {
-        static std::random_device RandomDevice;
-        static std::mt19937 MersenneTwisterGenerator(RandomDevice());
-        static std::uniform_int_distribution<> SudokuValDistrib(MinVal, MaxVal);
-        return SudokuValDistrib(MersenneTwisterGenerator);
+        static std::uniform_int_distribution<> Distrib(MinVal, MaxVal); // [1, 9]
+        return Distrib(RandomGenerator);
     }
 
     void Init()
@@ -53,13 +52,13 @@ struct SudokuGrid
 
         for (u32 Idx = 0; Idx < NumInitVals; Idx++)
         {
-            u32 GridCellIdx = GetRandomGridCellIdx();
+            u32 GridCellIdx = RandomCellIdx();
             while (Grid[GridCellIdx] != 0)
             {
-                GridCellIdx = GetRandomGridCellIdx();
+                GridCellIdx = RandomCellIdx();
             }
 
-            Grid[GridCellIdx] = GetRandomSudokuValue();
+            Grid[GridCellIdx] = RandomValue();
         }
     }
 
@@ -83,6 +82,9 @@ struct SudokuGrid
         }
     }
 };
+
+std::random_device SudokuGrid::RandomDevice{};
+std::mt19937 SudokuGrid::RandomGenerator{SudokuGrid::RandomDevice()};
 
 int main()
 {
