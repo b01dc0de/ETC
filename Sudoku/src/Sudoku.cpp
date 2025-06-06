@@ -1,31 +1,14 @@
-#include <stdint.h>
-#include <stdio.h>
+#include "Sudoku.h"
 
-#include <random>
-
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-
-using f32 = float;
-using f64 = double;
-
+static constexpr u32 Width = 9;
+static constexpr u32 NumRows = Width;
+static constexpr u32 Size = Width * NumRows;
+static constexpr u32 NumInitVals = 17;
+static constexpr s32 MinVal = 1;
+static constexpr s32 MaxVal = 9;
 
 struct SudokuGrid
 {
-    static constexpr u32 Stride = 9;
-    static constexpr u32 NumRows = Stride;
-    static constexpr u32 Size = Stride * NumRows;
-    static constexpr u32 NumInitVals = 17;
-    static constexpr s32 MinVal = 1;
-    static constexpr s32 MaxVal = 9;
-
     static std::random_device RandomDevice;
     static std::mt19937 RandomGenerator;
 
@@ -66,9 +49,9 @@ struct SudokuGrid
     {
         for (u32 RowIdx = 0; RowIdx < NumRows; RowIdx++)
         {
-            for (u32 ColIdx = 0; ColIdx < Stride; ColIdx++)
+            for (u32 ColIdx = 0; ColIdx < Width; ColIdx++)
             {
-                printf("%u", Grid[RowIdx * Stride + ColIdx]);
+                printf("%u", Grid[RowIdx * Width + ColIdx]);
                 if (ColIdx == 2 || ColIdx == 5)
                 {
                     printf(" | ");
