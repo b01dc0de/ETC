@@ -1,6 +1,8 @@
 .vs/
 build/
 
+*.vcxproj.user
+
 FontRaster/*.bmp
 
 Haversine/output*.f64
