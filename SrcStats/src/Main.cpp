@@ -1,71 +1,5 @@
 #include "Common.h"
 
-template <typename T>
-struct DArray
-{
-    static constexpr u64 DefaultInitCapacity = 32;
-
-    u64 Capacity;
-    u64 Num;
-    T* Data;
-
-    void Init(u64 _Capacity = DefaultInitCapacity)
-    {
-        Capacity = _Capacity;
-        Num = 0;
-        Data = new T[Capacity];
-    }
-    void Term()
-    {
-        if (Data)
-        {
-            delete[] Data;
-        }
-    }
-    void Resize(u64 NewCapacity)
-    {
-        ASSERT(NewCapacity > Capacity);
-        T* OldData = Data;
-        Capacity = NewCapacity;
-        Data = new T[NewCapacity];
-        memcpy_s(Data, sizeof(T) * Num, OldData, sizeof(T) * Num);
-        delete[] OldData;
-    }
-    void Add(T Item)
-    {
-        if (Num + 1 > Capacity)
-        {
-            Resize(Capacity * 2);
-        }
-        Data[Num++] = Item;
-    }
-    T& AddGetRef()
-    {
-        if (Num + 1 > Capacity)
-        {
-            Resize(Capacity * 2);
-        }
-        Data[Num] = {};
-        T& NewItem = Data[Num];
-        Num++;
-        return NewItem;
-    }
-    void RemoveLast()
-    {
-        if (Num)
-        {
-            Data[Num - 1] = {};
-            Num--;
-        }
-    }
-
-    T& operator[](u64 Idx)
-    {
-        ASSERT(Idx < Num);
-        return Data[Idx];
-    }
-};
-
 struct FileTreeT
 {
     FileTreeT* Parent;
@@ -108,7 +42,7 @@ int main(int argc, const char* argv[])
     const char* DefaultTestingSrc = "W:/UBG/src";
     const char* SearchDirectory = DefaultTestingSrc;
 
-    static constexpr bool bPrintFileTree = false;
+    static constexpr bool bPrintFileTree = true;
 
     FileTreeT Tree = {};
     PopulateFileTree(&Tree, SearchDirectory);
@@ -133,14 +67,15 @@ void LoadFileContents(FileContentsT* FileContents, const char* AbsoluteFilePath)
 
     if (File)
     {
-
         // Seek to end of file to get file size
         fseek(File, 0, SEEK_END);
         Size = ftell(File);
+        // Seek back to beginning of file
+        fseek(File, 0, SEEK_SET);
 
         if (Size)
         {
-            u8* Data = new u8[Size];
+            Data = new u8[Size];
             fread(Data, sizeof(u8), Size, File);
         }
         fclose(File);
@@ -170,12 +105,14 @@ void GetStats(FileTreeT* Tree, SrcStatsT* Stats, DArray<char*>* Dirs)
     {
         DArray<char*> RootDirs = {};
         RootDirs.Init();
-        RootDirs.Add(Tree->BaseDirectory);
         GetStats(Tree, Stats, &RootDirs);
         RootDirs.Term();
     }
     else
     {
+        u64 BeforeCount = Dirs->Num;
+        Dirs->Add(Tree->BaseDirectory);
+
         Stats->NumFiles += Tree->Files.Num;
         for (u64 FileIdx = 0; FileIdx < Tree->Files.Num; FileIdx++)
         {
@@ -185,24 +122,19 @@ void GetStats(FileTreeT* Tree, SrcStatsT* Stats, DArray<char*>* Dirs)
             // Read file contents
             FileContentsT LoadedFile = {};
             LoadFileContents(&LoadedFile, FullPath);
-            //ASSERT(LoadedFile.Data);
+            ASSERT(LoadedFile.Data);
 
             // Count lines
-            if (LoadedFile.Data)
-            {
-                Stats->NumLines += CountLines(&LoadedFile);
-            }
+            Stats->NumLines += CountLines(&LoadedFile);
 
             // Release file contents
             delete[] LoadedFile.Data;
         }
-        u64 BeforeCount = Dirs->Num;
-        if (Dirs->Num > 1) { Dirs->Add(Tree->BaseDirectory); }
         for (u64 SubdirIdx = 0; SubdirIdx < Tree->Subdirs.Num; SubdirIdx++)
         {
             GetStats(Tree->Subdirs[SubdirIdx], Stats, Dirs);
         }
-        if (Dirs->Num > 1) { Dirs->RemoveLast(); }
+        Dirs->RemoveLast();
         u64 AfterCount = Dirs->Num;
         ASSERT(BeforeCount == AfterCount);
     }
