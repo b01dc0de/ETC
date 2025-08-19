@@ -23,6 +23,7 @@ struct FileContentsT
 void LoadFileContents(FileContentsT* FileContents, const char* AbsoluteFilePath);
 u64 CountLines(FileContentsT* FileContents);
 void GetStats(FileTreeT* Tree, SrcStatsT* Stats, DArray<char*>* Dirs);
+void PrintStats(SrcStatsT* Stats);
 char* ConstructFullPath(DArray<char*>* Dirs, const char* File);
 char* ConstructFullPathSearchQuery(FileTreeT* Tree);
 void PopulateFileTree(FileTreeT* Tree, const char* BaseDirectory);
@@ -42,12 +43,13 @@ int main(int argc, const char* argv[])
     const char* DefaultTestingSrc = "W:/UBG/src";
     const char* SearchDirectory = DefaultTestingSrc;
 
-    static constexpr bool bPrintFileTree = true;
+    static constexpr bool bPrintFileTree = false;
 
     FileTreeT Tree = {};
     PopulateFileTree(&Tree, SearchDirectory);
     SrcStatsT Stats = {};
     GetStats(&Tree, &Stats, nullptr);
+    PrintStats(&Stats);
     if (bPrintFileTree)
     {
         PrintFullFileTree(&Tree);
@@ -138,6 +140,13 @@ void GetStats(FileTreeT* Tree, SrcStatsT* Stats, DArray<char*>* Dirs)
         u64 AfterCount = Dirs->Num;
         ASSERT(BeforeCount == AfterCount);
     }
+}
+
+void PrintStats(SrcStatsT* Stats)
+{
+    Outf("Stats:\n");
+    Outf("\tNum files: %d\n", Stats->NumFiles);
+    Outf("\tTotal line count: %d\n", Stats->NumLines);
 }
 
 char* ConstructFullPath(DArray<char*>* Dirs, const char* File)
