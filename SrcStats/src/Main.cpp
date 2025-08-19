@@ -1,17 +1,15 @@
 #include "Common.h"
 
-void Outf(const char* Fmt, ...);
-bool MatchStr(const char* A, const char* B);
-void CopyFileName(char* Dst, const char* Src);
-
 template <typename T>
 struct DArray
 {
+    static constexpr u64 DefaultInitCapacity = 32;
+
     u64 Capacity;
     u64 Num;
     T* Data;
 
-    void Init(u64 _Capacity)
+    void Init(u64 _Capacity = DefaultInitCapacity)
     {
         Capacity = _Capacity;
         Num = 0;
@@ -52,6 +50,14 @@ struct DArray
         Num++;
         return NewItem;
     }
+    void RemoveLast()
+    {
+        if (Num)
+        {
+            Data[Num - 1] = {};
+            Num--;
+        }
+    }
 
     T& operator[](u64 Idx)
     {
@@ -62,10 +68,20 @@ struct DArray
 
 struct FileTreeT
 {
+    FileTreeT* Parent;
     char* BaseDirectory;
     DArray<char*> Files;
     DArray<FileTreeT*> Subdirs;
 };
+
+char* ConstructFullPathSearchQuery(FileTreeT* Tree);
+void PopulateFileTree(FileTreeT* Tree, const char* BaseDirectory);
+void PopulateSubdir(FileTreeT* Tree);
+void PrintFullFileTree(FileTreeT* Tree);
+void PrintSubdir(FileTreeT* Tree, DArray<s32>* IndexList);
+void Outf(const char* Fmt, ...);
+bool MatchStr(const char* A, const char* B);
+void CopyFileName(char* Dst, const char* Src);
 
 int main(int argc, const char* argv[])
 {
@@ -76,22 +92,74 @@ int main(int argc, const char* argv[])
     const char* DefaultTestingSrc = "W:/UBG/src";
     const char* SearchDirectory = DefaultTestingSrc;
 
+    FileTreeT Tree = {};
+    PopulateFileTree(&Tree, SearchDirectory);
+    PrintFullFileTree(&Tree);
+}
+
+char* ConstructFullPathSearchQuery(FileTreeT* Tree)
+{
+    char* Result = nullptr;
+    if (Tree)
+    {
+        DArray<char*> ReverseTree = {};
+        ReverseTree.Init();
+        FileTreeT* Cond = Tree;
+        while (Cond)
+        {
+            ReverseTree.Add(Cond->BaseDirectory);
+            Cond = Cond->Parent;
+        }
+
+        Result = new char[MAX_PATH] {};
+        int CharsWritten = 0;
+        for (s64 Idx = ReverseTree.Num - 1; Idx >= 0; Idx--)
+        {
+            int WriteCount = 0;
+            if (!Idx)
+            {
+                WriteCount = sprintf_s(Result + CharsWritten, MAX_PATH - CharsWritten, "%s\\*", ReverseTree[Idx]);
+            }
+            else
+            {
+                WriteCount = sprintf_s(Result + CharsWritten, MAX_PATH - CharsWritten, "%s\\", ReverseTree[Idx]);
+            }
+            ASSERT(WriteCount > 0);
+            CharsWritten += WriteCount;
+        }
+        ASSERT(CharsWritten < MAX_PATH);
+
+        for (int Idx = 0; Idx < CharsWritten; Idx++)
+        {
+            if (Result[Idx] == '/') { Result[Idx] = '\\'; }
+        }
+
+        ReverseTree.Term();
+    }
+    return Result;
+}
+
+void PopulateFileTree(FileTreeT* Tree, const char* BaseDirectory)
+{
+    if (!Tree || !BaseDirectory) { return; }
+
     char SearchQuery[MAX_PATH] = {};
-    s32 SearchQueryLength = sprintf_s(SearchQuery, MAX_PATH, "%s\\*", SearchDirectory);
+    s32 SearchQueryLength = sprintf_s(SearchQuery, MAX_PATH, "%s\\*", BaseDirectory);
     for (s32 Idx = 0; Idx < SearchQueryLength && SearchQuery[Idx]; Idx++)
     {
         if (SearchQuery[Idx] == '/') { SearchQuery[Idx] = '\\'; }
     }
 
-    static constexpr u64 DefaultDArrayCapacity = 32;
     DArray<WIN32_FIND_DATAA> FileList = {};
-    FileList.Init(DefaultDArrayCapacity);
+    FileList.Init();
 
-    FileTreeT FileTree = {};
-    FileTree.BaseDirectory = new char[MAX_PATH]{};
-    CopyFileName(FileTree.BaseDirectory, SearchDirectory);
-    FileTree.Files.Init(DefaultDArrayCapacity);
-    FileTree.Subdirs.Init(DefaultDArrayCapacity);
+    bool bHasParent = Tree->Parent;
+
+    Tree->Parent = nullptr;
+    Tree->BaseDirectory = new char[MAX_PATH]{};
+    CopyFileName(Tree->BaseDirectory, BaseDirectory);
+    Tree->Files.Init();
+    Tree->Subdirs.Init();
 
     WIN32_FIND_DATAA FoundFile = {};
     HANDLE SearchHandle = FindFirstFileA(SearchQuery, &FoundFile);
@@ -106,30 +174,131 @@ int main(int argc, const char* argv[])
             if (bIsDirectory)
             {
                 FileTreeT* NewSubdir = new FileTreeT{};
+                NewSubdir->Parent = Tree;
                 NewSubdir->BaseDirectory = new char[MAX_PATH];
+                NewSubdir->Files.Init();
+                NewSubdir->Subdirs.Init();
                 CopyFileName(NewSubdir->BaseDirectory, FoundFile.cFileName);
-                FileTree.Subdirs.Add(NewSubdir);
+                Tree->Subdirs.Add(NewSubdir);
+                PopulateSubdir(NewSubdir);
             }
             else
             {
                 char* NewFileName = new char[MAX_PATH];
                 CopyFileName(NewFileName, FoundFile.cFileName);
-                FileTree.Files.Add(NewFileName);
+                Tree->Files.Add(NewFileName);
             }
 		}
 		bDone = !FindNextFileA(SearchHandle, &FoundFile);
     }
     if (SearchHandle) { FindClose(SearchHandle); }
-    
-    Outf("Found %d files in directory %s:\n", FileTree.Files.Num, SearchDirectory);
-    for (s32 Idx = 0; Idx < FileTree.Files.Num; Idx++)
+}
+
+void PopulateSubdir(FileTreeT* Tree)
+{
+    char* FullPathSearchQuery = ConstructFullPathSearchQuery(Tree);
+    if (!Tree || !FullPathSearchQuery) { return; }
+
+    WIN32_FIND_DATAA FoundFile = {};
+    HANDLE SearchHandle = FindFirstFileA(FullPathSearchQuery, &FoundFile);
+
+    bool bDone = !SearchHandle;
+    while (!bDone)
     {
-        Outf("\t[%d]: %s\n", Idx, FileTree.Files[Idx]);
+        if (!MatchStr(".", FoundFile.cFileName) && !MatchStr("..", FoundFile.cFileName))
+		{
+            bool bIsDirectory = FoundFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+            if (bIsDirectory)
+            {
+                FileTreeT* NewSubdir = new FileTreeT{};
+                NewSubdir->Parent = Tree;
+                NewSubdir->BaseDirectory = new char[MAX_PATH];
+                NewSubdir->Files.Init();
+                NewSubdir->Subdirs.Init();
+                CopyFileName(NewSubdir->BaseDirectory, FoundFile.cFileName);
+                Tree->Subdirs.Add(NewSubdir);
+                PopulateSubdir(NewSubdir);
+            }
+            else
+            {
+                char* NewFileName = new char[MAX_PATH];
+                CopyFileName(NewFileName, FoundFile.cFileName);
+                Tree->Files.Add(NewFileName);
+            }
+		}
+		bDone = !FindNextFileA(SearchHandle, &FoundFile);
     }
-    Outf("Found %d subdirectories in directory %s:\n", FileTree.Subdirs.Num, SearchDirectory);
-    for (s32 Idx = 0; Idx < FileTree.Subdirs.Num; Idx++)
+    if (SearchHandle) { FindClose(SearchHandle); }
+    delete[] FullPathSearchQuery;
+}
+
+void PrintFullFileTree(FileTreeT* Tree)
+{
+    DArray<s32> IndexList = {};
+    IndexList.Init();
+
+    Outf("Found %d files in directory %s:\n", Tree->Files.Num, Tree->BaseDirectory);
+    for (s32 Idx = 0; Idx < Tree->Files.Num; Idx++)
     {
-        Outf("\t[%d]: %s\n", Idx, FileTree.Subdirs[Idx]->BaseDirectory);
+        Outf("\t[%d]: %s\n", Idx, Tree->Files[Idx]);
+    }
+    Outf("Found %d subdirectories in directory %s:\n", Tree->Subdirs.Num, Tree->BaseDirectory);
+    for (s32 Idx = 0; Idx < Tree->Subdirs.Num; Idx++)
+    {
+        FileTreeT* Subdir = Tree->Subdirs[Idx];
+        Outf("\t[%d]: %s\n", Idx, Subdir->BaseDirectory);
+        u64 BeforeCount = IndexList.Num;
+        IndexList.Add(Idx);
+        PrintSubdir(Subdir, &IndexList);
+        IndexList.RemoveLast();
+        u64 AfterCount = IndexList.Num;
+        ASSERT(BeforeCount == AfterCount);
+    }
+
+    IndexList.Term();
+}
+
+void PrintSubdir(FileTreeT* Tree, DArray<s32>* IndexList)
+{
+    // TODO: Figure out the right way to print a variable amount of tabs
+    //       Likely use '*' width-specifier?
+    auto PrintTabs = [](int Num)
+    {
+        for (s32 TabIdx = 0; TabIdx < Num; TabIdx++) { Outf("\t"); }
+    };
+
+    ASSERT(IndexList->Num);
+    if (Tree->Files.Num)
+    {
+        PrintTabs(IndexList->Num);
+        Outf("  Files:\n");
+        for (s32 Idx = 0; Idx < Tree->Files.Num; Idx++)
+        {
+            PrintTabs(IndexList->Num + 1);
+            Outf("[%d]: %s\n", Idx, Tree->Files[Idx]);
+        }
+    }
+    if (Tree->Subdirs.Num)
+    {
+        for (s32 Idx = 0; Idx < IndexList->Num; Idx++)
+        {
+            PrintTabs(IndexList->Num);
+            Outf("  Subdirs:\n");
+            for (s32 Idx = 0; Idx < Tree->Subdirs.Num; Idx++)
+            {
+                FileTreeT* Subdir = Tree->Subdirs[Idx];
+                PrintTabs(IndexList->Num + 1);
+                Outf("[%d]: %s\n", Idx, Subdir->BaseDirectory);
+                u64 BeforeCount = IndexList->Num; // TODO: Remove after impl'd
+                IndexList->Add(Idx);
+                PrintSubdir(Subdir, IndexList);
+                IndexList->RemoveLast();
+                u64 AfterCount = IndexList->Num; // TODO: Remove after impl'd
+                ASSERT(BeforeCount == AfterCount); // TODO: Remove after impl'd
+
+
+            }
+        }
     }
 }
 
@@ -146,6 +315,7 @@ void Outf(const char* Fmt, ...)
 
 bool MatchStr(const char* A, const char* B)
 {
+    if (!A || !B) { return false; }
     for (size_t Idx = 0;; Idx++)
     {
         if (!A[Idx] && !B[Idx])
@@ -157,7 +327,7 @@ bool MatchStr(const char* A, const char* B)
             return false;
         }
     }
-    return true; // TODO: Is this correct?
+    return false; // TODO: Is this correct?
 }
 
 void CopyFileName(char* Dst, const char* Src)
