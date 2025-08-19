@@ -74,6 +74,22 @@ struct FileTreeT
     DArray<FileTreeT*> Subdirs;
 };
 
+struct SrcStatsT
+{
+    int NumFiles;
+    int NumLines;
+};
+
+struct FileContentsT
+{
+    u64 Size;
+    u8* Data;
+};
+
+void LoadFileContents(FileContentsT* FileContents, const char* AbsoluteFilePath);
+u64 CountLines(FileContentsT* FileContents);
+void GetStats(FileTreeT* Tree, SrcStatsT* Stats, DArray<char*>* Dirs);
+char* ConstructFullPath(DArray<char*>* Dirs, const char* File);
 char* ConstructFullPathSearchQuery(FileTreeT* Tree);
 void PopulateFileTree(FileTreeT* Tree, const char* BaseDirectory);
 void PopulateSubdir(FileTreeT* Tree);
@@ -92,9 +108,125 @@ int main(int argc, const char* argv[])
     const char* DefaultTestingSrc = "W:/UBG/src";
     const char* SearchDirectory = DefaultTestingSrc;
 
+    static constexpr bool bPrintFileTree = false;
+
     FileTreeT Tree = {};
     PopulateFileTree(&Tree, SearchDirectory);
-    PrintFullFileTree(&Tree);
+    SrcStatsT Stats = {};
+    GetStats(&Tree, &Stats, nullptr);
+    if (bPrintFileTree)
+    {
+        PrintFullFileTree(&Tree);
+    }
+}
+
+void LoadFileContents(FileContentsT* FileContents, const char* AbsoluteFilePath)
+{
+    ASSERT(FileContents);
+    if (!FileContents) { return; }
+
+    long Size = 0;
+    u8* Data = nullptr;
+
+    FILE* File = nullptr;
+    fopen_s(&File, AbsoluteFilePath, "rb");
+
+    if (File)
+    {
+
+        // Seek to end of file to get file size
+        fseek(File, 0, SEEK_END);
+        Size = ftell(File);
+
+        if (Size)
+        {
+            u8* Data = new u8[Size];
+            fread(Data, sizeof(u8), Size, File);
+        }
+        fclose(File);
+    }
+    FileContents->Size = Size;
+    FileContents->Data = Data;
+}
+
+u64 CountLines(FileContentsT* FileContents)
+{
+    ASSERT(FileContents->Data && FileContents->Size);
+    u64 Result = 0;
+    for (u64 Idx = 0; Idx < FileContents->Size; Idx++)
+    {
+        // TODO: We probably want to handle the different OS new line formats here
+        if (FileContents->Data[Idx] == '\n')
+        {
+            Result++;
+        }
+    }
+    return Result;
+}
+
+void GetStats(FileTreeT* Tree, SrcStatsT* Stats, DArray<char*>* Dirs)
+{
+    if (!Dirs)
+    {
+        DArray<char*> RootDirs = {};
+        RootDirs.Init();
+        RootDirs.Add(Tree->BaseDirectory);
+        GetStats(Tree, Stats, &RootDirs);
+        RootDirs.Term();
+    }
+    else
+    {
+        Stats->NumFiles += Tree->Files.Num;
+        for (u64 FileIdx = 0; FileIdx < Tree->Files.Num; FileIdx++)
+        {
+            // Construct absolute path for file
+            char* FullPath = ConstructFullPath(Dirs, Tree->Files[FileIdx]);
+
+            // Read file contents
+            FileContentsT LoadedFile = {};
+            LoadFileContents(&LoadedFile, FullPath);
+            //ASSERT(LoadedFile.Data);
+
+            // Count lines
+            if (LoadedFile.Data)
+            {
+                Stats->NumLines += CountLines(&LoadedFile);
+            }
+
+            // Release file contents
+            delete[] LoadedFile.Data;
+        }
+        u64 BeforeCount = Dirs->Num;
+        if (Dirs->Num > 1) { Dirs->Add(Tree->BaseDirectory); }
+        for (u64 SubdirIdx = 0; SubdirIdx < Tree->Subdirs.Num; SubdirIdx++)
+        {
+            GetStats(Tree->Subdirs[SubdirIdx], Stats, Dirs);
+        }
+        if (Dirs->Num > 1) { Dirs->RemoveLast(); }
+        u64 AfterCount = Dirs->Num;
+        ASSERT(BeforeCount == AfterCount);
+    }
+}
+
+char* ConstructFullPath(DArray<char*>* Dirs, const char* File)
+{
+    char* Result = nullptr;
+    if (Dirs && File)
+    {
+        Result = new char[MAX_PATH] {};
+        int CharsWritten = 0;
+        for (u64 DirIdx = 0; DirIdx < Dirs->Num; DirIdx++)
+        {
+            int WriteCount = sprintf_s(Result + CharsWritten, MAX_PATH - CharsWritten, "%s/", (*Dirs)[DirIdx]);
+            ASSERT(WriteCount > 0);
+            CharsWritten += WriteCount;
+        }
+        int WriteCount = sprintf_s(Result + CharsWritten, MAX_PATH - CharsWritten, "%s", File);
+        ASSERT(WriteCount > 0);
+        CharsWritten += WriteCount;
+        ASSERT(CharsWritten < MAX_PATH);
+    }
+    return Result;
 }
 
 char* ConstructFullPathSearchQuery(FileTreeT* Tree)
