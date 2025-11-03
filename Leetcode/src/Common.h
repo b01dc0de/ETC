@@ -1,9 +1,15 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include <stdio.h>
+// Platform headers:
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+
+// C std lib:
+#include <stdio.h>
+
+// C++ std lib:
+#include <vector>
 
 void Outf(const char* Fmt, ...);
 
