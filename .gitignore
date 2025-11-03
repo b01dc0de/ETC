@@ -1,5 +1,5 @@
-.vs/
-build/
+*/.vs/
+*/build/
 
 *.vcxproj.user
 
@@ -7,4 +7,3 @@ FontRaster/*.bmp
 
 Haversine/output*.f64
 Haversine/output*.json
-
