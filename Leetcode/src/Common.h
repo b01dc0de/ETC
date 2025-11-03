@@ -9,6 +9,7 @@
 #include <stdio.h>
 
 // C++ std lib:
+#include <string>
 #include <vector>
 
 void Outf(const char* Fmt, ...);
