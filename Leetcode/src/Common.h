@@ -14,4 +14,6 @@
 
 void Outf(const char* Fmt, ...);
 
+#define Assert(Exp) if (!(Exp)) { __debugbreak(); }
+
 #endif // COMMON_H
