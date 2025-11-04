@@ -140,6 +140,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\LC0002.cpp" />
+    <ClCompile Include="src\LC0003.cpp" />
     <ClCompile Include="src\LC0009.cpp" />
     <ClCompile Include="src\LC0020.cpp" />
     <ClCompile Include="src\LC0021.cpp" />
