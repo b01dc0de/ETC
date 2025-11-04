@@ -21,6 +21,12 @@
     <ClCompile Include="src\LC0028.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\LC0020.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LC0002.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Common.h">
