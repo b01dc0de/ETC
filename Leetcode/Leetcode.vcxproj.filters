@@ -36,6 +36,9 @@
     <ClCompile Include="src\LC0014.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\LC0015.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Common.h">

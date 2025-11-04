@@ -9,6 +9,7 @@
 #include <stdio.h>
 
 // C++ std lib:
+#include <algorithm>
 #include <string>
 #include <vector>
 
