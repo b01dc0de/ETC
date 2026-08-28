@@ -1,0 +1,54 @@
+{
+    "ArrayOfArrays": [
+        [
+            1,
+            2,
+            3,
+            4,
+            5
+        ],
+        [
+            [
+                "hello",
+                "goodbye"
+            ]
+        ],
+        [
+            {
+                "testKey": "testValue"
+            }
+        ],
+        [
+            [
+                [
+                    [
+                        [
+                            [
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ],
+
+    "ObjectOfArrays": {
+        "Array0" : [
+            "100",
+            "200",
+            "300"
+        ],
+        "Array1": [
+            true,
+            false,
+            null
+        ],
+        "Array2": [
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5
+        ]
+    }
+}

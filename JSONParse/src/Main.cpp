@@ -93,10 +93,16 @@ struct DynamicArray
         Data[Size] = Item;
         Size++;
     }
+
+    T& Last()
+    {
+        return Data[Size - 1];
+    }
 };
 
 enum JSONType
 {
+    JSONType_Unspecified,
     JSONType_Object,
     JSONType_Array,
     JSONType_String,
@@ -130,6 +136,7 @@ struct JSONObject
 
 enum JSONToken
 {
+    JSONToken_Unspecified,
     JSONToken_LeftCurly,
     JSONToken_RightCurly,
     JSONToken_LeftSquare,
@@ -141,8 +148,7 @@ enum JSONToken
     JSONToken_LiteralBoolean,
     JSONToken_LiteralNull,
     JSONToken_Error,
-    JSONToken_End,
-    JSONToken_Other
+    JSONToken_End
 };
 
 struct JSONObjectStack
@@ -167,8 +173,9 @@ struct JSONParseContext
     bool bEnd;
 
     bool bColon;
+    bool bComma;
 
-#define ENABLE_DEBUG_STREAM() (_DEBUG && 1)
+#define ENABLE_DEBUG_STREAM() (_DEBUG && 0)
 #if ENABLE_DEBUG_STREAM()
     DynamicArray<JSONToken> Debug_TokenStream;
     DynamicArray<JSONValue> Debug_ValueStream;
@@ -245,7 +252,7 @@ void JSONParseContext::Debug_PrintToken(int& TokenIdx, int& ValueIdx)
             case JSONToken_Error: { printf("Token_Error\n"); } break;
             case JSONToken_End: { printf("Token_End\n"); } break;
 
-            case JSONToken_Other:
+            case JSONToken_Unspecified:
             default:
             {
                 Assert(false);
@@ -278,7 +285,7 @@ JSONToken JSONParseContext::PeekNextToken()
     if (bEnd || ReadIdx >= JSONContents.Size) { return JSONToken_End; }
 
     int PeekIdx = 0;
-    JSONToken Token = JSONToken_Other;
+    JSONToken Token = JSONToken_Unspecified;
     while ((ReadIdx + PeekIdx) < JSONContents.Size)
     {
         u8 CurrChar = JSONContents.Contents[ReadIdx + PeekIdx];
@@ -315,7 +322,7 @@ JSONToken JSONParseContext::PeekNextToken()
             default: { } break;
         }
 
-        if (Token != JSONToken_Other) { break; }
+        if (Token != JSONToken_Unspecified) { break; }
         else { PeekIdx++; }
     }
 
@@ -465,35 +472,98 @@ JSONValue JSONParseContext::ParseLiteral()
 void JSONParseContext::ParseToken()
 {
     JSONToken Token = PeekNextToken();
+    // TODO(CKA): Check for bComma when adding to a list (_besides_ the first object)
     switch (Token)
     {
         case JSONToken_LeftCurly:
         {
+            // Case A: Root object
+            if (Stack.IsEmpty()) { Stack.Push(&Root); }
+            // Case B: New object within another object
+            else if (Stack.Top() && Stack.Top()->Value.Type == JSONType_Object)
+            {
+                JSONObject* Last = Stack.Top()->Value.List->Last();
+                if (Last != nullptr && bColon && Last->Value.Type == JSONType_Unspecified)
+                {
+                    Last->Value.Type = JSONType_Object;
+                    Last->Value.List = new DynamicArray<JSONObject*>{};
+                    Stack.Push(Last);
+                }
+                else { Assert(false); bError = true; }
+            }
+            // Case C: New object within array
+            else if (Stack.Top() && Stack.Top()->Value.Type == JSONType_Array)
+            {
+                if (Stack.Top()->Key == nullptr && !bColon &&
+                    (Stack.Top()->Value.List->Size == 0 || bComma))
+                {
+                    JSONObject* NewObject = new JSONObject{ };
+                    NewObject->Value.Type = JSONType_Object;
+                    NewObject->Value.List = new DynamicArray<JSONObject*>{};
+                    Stack.Top()->Value.List->Add(NewObject);
+                    Stack.Push(NewObject);
+                }
+                else { Assert(false); bError = true; }
+            }
+            else { Assert(false); bError = true; }
             ReadIdx++;
         } break;
 
         case JSONToken_RightCurly:
         {
+            if (!Stack.IsEmpty() && Stack.Top()->Value.Type == JSONType_Object) { Stack.Pop(); }
+            else { Assert(false); bError = true; }
             ReadIdx++;
+            if (Stack.IsEmpty()) { bEnd = true; }
         } break;
 
         case JSONToken_LeftSquare:
         {
+            if (!Stack.IsEmpty() && Stack.Top() && Stack.Top()->Value.Type == JSONType_Object)
+            {
+                JSONObject* Last = Stack.Top()->Value.List->Last();
+                if (Last != nullptr && bColon && Last->Value.Type == JSONType_Unspecified)
+                {
+                    Last->Value.Type = JSONType_Array;
+                    Last->Value.List = new DynamicArray<JSONObject*>{};
+                    Stack.Push(Last);
+                }
+                else { Assert(false); bError = true; }
+            }
+            else if (!Stack.IsEmpty() && Stack.Top() && Stack.Top()->Value.Type == JSONType_Array)
+            {
+                if (Stack.Top()->Key == nullptr && !bColon &&
+                    (Stack.Top()->Value.List->Size == 0 || bComma))
+                {
+                    JSONObject* NewObject = new JSONObject{ };
+                    NewObject->Value.Type = JSONType_Array;
+                    NewObject->Value.List = new DynamicArray<JSONObject*>{};
+                    Stack.Top()->Value.List->Add(NewObject);
+                    Stack.Push(NewObject);
+                }
+                else { Assert(false); bError = true; }
+            }
+            else { Assert(false); bError = true; }
+
             ReadIdx++;
         } break;
 
         case JSONToken_RightSquare:
         {
+            if (!Stack.IsEmpty() && Stack.Top()->Value.Type == JSONType_Array) { Stack.Pop(); }
+            else { Assert(false); bError = true; }
             ReadIdx++;
         } break;
 
         case JSONToken_Colon:
         {
+            if (Stack.Top()->Value.Type != JSONType_Object || bColon || bComma) { Assert(false); bError = true; }
             ReadIdx++;
         } break;
 
         case JSONToken_Comma:
         {
+            if (bColon || bComma) { Assert(false); bError = true; }
             ReadIdx++;
         } break;
 
@@ -501,6 +571,41 @@ void JSONParseContext::ParseToken()
         {
             int StringLength = 0;
             char* NewString = ParseString();
+            if (NewString)
+            {
+                if (bColon)
+                {
+                    JSONObject* Top = Stack.Top();
+                    JSONObject* Last = Top->Value.List->Last();
+                    if (Top && Top->Value.Type == JSONType_Object && Top->Value.List->Size != 0 &&
+                        Last && Last->Key && Last->Value.Type == JSONType_Unspecified)
+                    {
+                        Last->Value.Type = JSONType_String;
+                        Last->Value.String = NewString;
+                    }
+                    else { Assert(false); bError = true; }
+                }
+                else
+                {
+                    JSONObject* NewObject = new JSONObject{};
+                    JSONObject* Top = Stack.Top();
+                    if (Top && Top->Value.Type == JSONType_Object)
+                    {
+                        NewObject->Key = NewString;
+                        NewObject->Value.Type = JSONType_Unspecified;
+                        Top->Value.List->Add(NewObject);
+                    }
+                    else if (Top && Top->Value.Type == JSONType_Array)
+                    {
+                        NewObject->Value.Type = JSONType_String;
+                        NewObject->Value.String = NewString;
+                        Top->Value.List->Add(NewObject);
+                    }
+                    else { Assert(false); bError = true; }
+                }
+            }
+            else { Assert(false); bError = true; }
+            if (bError) { delete[] NewString; }
         #if ENABLE_DEBUG_STREAM()
             JSONValue Debug_JSONString = { JSONType_String };
             Debug_JSONString.String = NewString;
@@ -509,31 +614,44 @@ void JSONParseContext::ParseToken()
         } break;
 
         case JSONToken_Number:
-        {
-            int NumberLength = 0;
-            JSONValue NewNumber = ParseNumber();
-        #if ENABLE_DEBUG_STREAM()
-            Debug_ValueStream.Add(NewNumber);
-        #endif ENABLE_DEBUG_STREAM()
-        } break;
-
         case JSONToken_LiteralBoolean:
         case JSONToken_LiteralNull:
         {
-            JSONValue NewLiteral = ParseLiteral();
+            JSONValue NewValue = {};
+            if (Token == JSONToken_Number) { NewValue = ParseNumber(); }
+            else if (Token == JSONToken_LiteralBoolean || Token == JSONToken_LiteralNull) { NewValue = ParseLiteral(); }
+
+            if (NewValue.Type != JSONType_Unspecified && NewValue.Type != JSONType_Error)
+            {
+                JSONObject* Top = Stack.Top();
+                if (Top && Top->Value.Type == JSONType_Object)
+                {
+                    JSONObject* Last = Top->Value.List->Last();
+                    if (Last && Last->Key && Last->Value.Type == JSONType_Unspecified) { Last->Value = NewValue; }
+                    else { Assert(false); bError = true; }
+                }
+                else if (Top && Top->Value.Type == JSONType_Array)
+                {
+                    JSONObject* NewObject = new JSONObject{ nullptr, NewValue };
+                    Top->Value.List->Add(NewObject);
+                }
+                else { Assert(false); bError = true; }
+            }
+            else { Assert(false); bError = true; }
         #if ENABLE_DEBUG_STREAM()
-            Debug_ValueStream.Add(NewLiteral);
+            Debug_ValueStream.Add(NewValue);
         #endif ENABLE_DEBUG_STREAM()
         } break;
 
         case JSONToken_End: { bEnd = true; } break;
 
         case JSONToken_Error:
-        case JSONToken_Other:
+        case JSONToken_Unspecified:
         default: { bError = true; } break;
     }
 
     bColon = Token == JSONToken_Colon;
+    bComma = Token == JSONToken_Comma;
 
 #if ENABLE_DEBUG_STREAM()
     Debug_TokenStream.Add(Token);
@@ -568,7 +686,7 @@ JSONObject JSONParse(FileContentsT JSONContents)
 
 int main()
 {
-    FileContentsT JSONText = ReadFileContents("test/example.json", true);
+    FileContentsT JSONText = ReadFileContents("test/example_glossary.json", true);
     JSONObject Root = JSONParse(JSONText);
 
     return 0;
