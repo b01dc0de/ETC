@@ -104,7 +104,7 @@ enum JSONType
     JSONType_NumberFloat,
     JSONType_Boolean,
     JSONType_Null,
-    JSONType_Error,
+    JSONType_Error
 };
 
 struct JSONObject;
@@ -145,16 +145,28 @@ enum JSONToken
     JSONToken_Other
 };
 
+struct JSONObjectStack
+{
+    DynamicArray<JSONObject*> Stack;
+
+    bool IsEmpty() { return Stack.Size == 0; }
+    void Push(JSONObject* NewObject) { Stack.Add(NewObject); }
+    void Pop() { Assert(!IsEmpty()); if (!IsEmpty()) { Stack[Stack.Size - 1] = {}; Stack.Size--; } }
+    JSONObject* Top() { JSONObject* Result = nullptr; if (!IsEmpty()) { return Stack[Stack.Size - 1]; } }
+};
+
 struct JSONParseContext
 {
     FileContentsT JSONContents;
     u64 ReadIdx;
 
     JSONObject Root;
-    DynamicArray<JSONObject*> Stack;
+    JSONObjectStack Stack;
 
     bool bError;
     bool bEnd;
+
+    bool bColon;
 
 #define ENABLE_DEBUG_STREAM() (_DEBUG && 1)
 #if ENABLE_DEBUG_STREAM()
@@ -168,7 +180,7 @@ struct JSONParseContext
     bool IsCharValidNumber(char X);
 
     JSONToken PeekNextToken();
-    JSONValue ParseString();
+    char* ParseString();
     JSONValue ParseNumber();
     JSONValue ParseLiteral();
 
@@ -313,18 +325,18 @@ JSONToken JSONParseContext::PeekNextToken()
     return Token;
 }
 
-JSONValue JSONParseContext::ParseString()
+char* JSONParseContext::ParseString()
 {
     Assert(JSONContents.Contents[ReadIdx] == '"');
     u64 BeginQuoteIdx = ReadIdx;
 
     ReadIdx++;
     while (ReadIdx < JSONContents.Size && JSONContents.Contents[ReadIdx] != '"') { ReadIdx++; }
-    Assert(JSONContents.Contents[ReadIdx] == '"');
 
+    Assert(JSONContents.Contents[ReadIdx] == '"');
     u64 EndQuoteIdx = ReadIdx;
 
-    JSONValue Result = { JSONType_Error };
+    char* Result = nullptr;
     if (ReadIdx < JSONContents.Size && 
         BeginQuoteIdx < EndQuoteIdx &&
         JSONContents.Contents[BeginQuoteIdx] == '"' &&
@@ -334,13 +346,12 @@ JSONValue JSONParseContext::ParseString()
         u64 EndStringIdx = EndQuoteIdx - 1;
         u64 StringLength = EndStringIdx - BeginStringIdx + 1;
 
-        Result.Type = JSONType_String;
-        Result.String = new char[StringLength + 1];
+        Result = new char[StringLength + 1];
         for (int StringIdx = 0; StringIdx < StringLength; StringIdx++)
         {
-            Result.String[StringIdx] = JSONContents.Contents[BeginStringIdx + StringIdx];
+            Result[StringIdx] = JSONContents.Contents[BeginStringIdx + StringIdx];
         }
-        Result.String[StringLength] = '\0';
+        Result[StringLength] = '\0';
 
         ReadIdx++;
     }
@@ -405,7 +416,7 @@ JSONValue JSONParseContext::ParseLiteral()
         return false;
     };
 
-    constexpr const char* LiteralTrue= "true";
+    constexpr const char* LiteralTrue = "true";
     constexpr size_t LiteralTrueLength = sizeof("true") - 1;
     constexpr const char* LiteralFalse = "false";
     constexpr size_t LiteralFalseLength = sizeof("false") - 1;
@@ -489,9 +500,11 @@ void JSONParseContext::ParseToken()
         case JSONToken_String:
         {
             int StringLength = 0;
-            JSONValue Debug_NewString = ParseString();
+            char* NewString = ParseString();
         #if ENABLE_DEBUG_STREAM()
-            Debug_ValueStream.Add(Debug_NewString);
+            JSONValue Debug_JSONString = { JSONType_String };
+            Debug_JSONString.String = NewString;
+            Debug_ValueStream.Add(Debug_JSONString);
         #endif ENABLE_DEBUG_STREAM()
         } break;
 
@@ -519,6 +532,8 @@ void JSONParseContext::ParseToken()
         case JSONToken_Other:
         default: { bError = true; } break;
     }
+
+    bColon = Token == JSONToken_Colon;
 
 #if ENABLE_DEBUG_STREAM()
     Debug_TokenStream.Add(Token);
@@ -554,8 +569,6 @@ JSONObject JSONParse(FileContentsT JSONContents)
 int main()
 {
     FileContentsT JSONText = ReadFileContents("test/example.json", true);
-    //FileContentsT JSONText = ReadFileContents("test/example_literals.json", true);
-    //FileContentsT JSONText = ReadFileContents("test/example_numbers.json", true);
     JSONObject Root = JSONParse(JSONText);
 
     return 0;
