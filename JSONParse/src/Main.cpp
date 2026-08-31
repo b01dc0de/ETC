@@ -574,6 +574,8 @@ int main()
 
     FileContentsT JSONText_SimpleLists = ReadFileContents("test/example_simple_lists.json", true);
     JSONObject Root_SimpleLists = JSONParse(JSONText_SimpleLists);
+    
+    RunTests_ExampleSimpleLists(&Root_SimpleLists);
 
     return 0;
 }
