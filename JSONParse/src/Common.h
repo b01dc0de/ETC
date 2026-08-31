@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define WIN32_LEAN_AND_MEAN
+#include <crtdbg.h>
+#include <Windows.h>
+
 using s8 = int8_t;
 using s16 = int16_t;
 using s32 = int32_t;

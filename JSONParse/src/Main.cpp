@@ -565,17 +565,77 @@ JSONObject JSONParse(FileContentsT JSONContents)
     return Context.Root;
 }
 
+void FreeJSONObject(JSONObject* Object)
+{
+    if (!Object) { return; }
+
+    if (Object->Key) { delete[] Object->Key; }
+    switch (Object->Value.Type)
+    {
+        case JSONType_Object:
+        case JSONType_Array:
+        {
+            for (int Idx = 0; Idx < Object->Value.List->Size; Idx++) { FreeJSONObject(Object->Value.List->Data[Idx]); }
+            delete Object->Value.List;
+        } break;
+
+        case JSONType_String:
+        {
+            if (Object->Value.String) { delete[] Object->Value.String; }
+        } break;
+
+        case JSONType_NumberInt:
+        case JSONType_NumberFloat:
+        case JSONType_Boolean:
+        case JSONType_Null:
+        {
+        } break;
+
+        case JSONType_Unspecified:
+        case JSONType_Error:
+        default:
+        {
+            Assert(false);
+        } break;
+    }
+    delete Object;
+}
+
+void FreeJSONRoot(JSONObject* Root)
+{
+    if (!Root) { return; }
+
+    for (int Idx = 0; Root->Value.List && Idx < Root->Value.List->Size; Idx++)
+    {
+        FreeJSONObject(Root->Value.List->Data[Idx]);
+    }
+    delete Root->Value.List;
+    *Root = {};
+}
+
 int main()
 {
+#if _DEBUG
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif // _DEBUG
+
     FileContentsT JSONText_Glossary = ReadFileContents("test/example_glossary.json", true);
     JSONObject Root_Glossary = JSONParse(JSONText_Glossary);
-
     RunTests_ExampleGlossary(&Root_Glossary);
 
     FileContentsT JSONText_SimpleLists = ReadFileContents("test/example_simple_lists.json", true);
     JSONObject Root_SimpleLists = JSONParse(JSONText_SimpleLists);
-    
     RunTests_ExampleSimpleLists(&Root_SimpleLists);
+
+    constexpr bool bCleanupMemory = true;
+    if (bCleanupMemory)
+    {
+        delete[] JSONText_Glossary.Contents;
+        FreeJSONRoot(&Root_Glossary);
+
+        delete[] JSONText_SimpleLists.Contents;
+        FreeJSONRoot(&Root_SimpleLists);
+    }
 
     return 0;
 }
