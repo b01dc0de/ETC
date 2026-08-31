@@ -494,8 +494,7 @@ void JSONParseContext::ParseToken()
             // Case C: New object within array
             else if (Stack.Top() && Stack.Top()->Value.Type == JSONType_Array)
             {
-                if (Stack.Top()->Key == nullptr && !bColon &&
-                    (Stack.Top()->Value.List->Size == 0 || bComma))
+                if (!bColon && (Stack.Top()->Value.List->Size == 0 || bComma))
                 {
                     JSONObject* NewObject = new JSONObject{ };
                     NewObject->Value.Type = JSONType_Object;
