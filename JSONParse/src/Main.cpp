@@ -476,28 +476,26 @@ void JSONParseContext::ParseToken()
     switch (Token)
     {
         case JSONToken_LeftCurly:
+        case JSONToken_LeftSquare:
         {
-            // Case A: Root object
-            if (Stack.IsEmpty()) { Stack.Push(&Root); }
-            // Case B: New object within another object
+            if (Stack.IsEmpty() && Token == JSONToken_LeftCurly) { Stack.Push(&Root); }
             else if (Stack.Top() && Stack.Top()->Value.Type == JSONType_Object)
             {
                 JSONObject* Last = Stack.Top()->Value.List->Last();
                 if (Last != nullptr && bColon && Last->Value.Type == JSONType_Unspecified)
                 {
-                    Last->Value.Type = JSONType_Object;
+                    Last->Value.Type = Token == JSONToken_LeftCurly ? JSONType_Object : JSONType_Array;
                     Last->Value.List = new DynamicArray<JSONObject*>{};
                     Stack.Push(Last);
                 }
                 else { Assert(false); bError = true; }
             }
-            // Case C: New object within array
             else if (Stack.Top() && Stack.Top()->Value.Type == JSONType_Array)
             {
                 if (!bColon && (Stack.Top()->Value.List->Size == 0 || bComma))
                 {
                     JSONObject* NewObject = new JSONObject{ };
-                    NewObject->Value.Type = JSONType_Object;
+                    NewObject->Value.Type = Token == JSONToken_LeftCurly ? JSONType_Object : JSONType_Array;
                     NewObject->Value.List = new DynamicArray<JSONObject*>{};
                     Stack.Top()->Value.List->Add(NewObject);
                     Stack.Push(NewObject);
@@ -513,38 +511,7 @@ void JSONParseContext::ParseToken()
             if (!Stack.IsEmpty() && Stack.Top()->Value.Type == JSONType_Object) { Stack.Pop(); }
             else { Assert(false); bError = true; }
             ReadIdx++;
-            if (Stack.IsEmpty()) { bEnd = true; }
-        } break;
-
-        case JSONToken_LeftSquare:
-        {
-            if (!Stack.IsEmpty() && Stack.Top() && Stack.Top()->Value.Type == JSONType_Object)
-            {
-                JSONObject* Last = Stack.Top()->Value.List->Last();
-                if (Last != nullptr && bColon && Last->Value.Type == JSONType_Unspecified)
-                {
-                    Last->Value.Type = JSONType_Array;
-                    Last->Value.List = new DynamicArray<JSONObject*>{};
-                    Stack.Push(Last);
-                }
-                else { Assert(false); bError = true; }
-            }
-            else if (!Stack.IsEmpty() && Stack.Top() && Stack.Top()->Value.Type == JSONType_Array)
-            {
-                if (Stack.Top()->Key == nullptr && !bColon &&
-                    (Stack.Top()->Value.List->Size == 0 || bComma))
-                {
-                    JSONObject* NewObject = new JSONObject{ };
-                    NewObject->Value.Type = JSONType_Array;
-                    NewObject->Value.List = new DynamicArray<JSONObject*>{};
-                    Stack.Top()->Value.List->Add(NewObject);
-                    Stack.Push(NewObject);
-                }
-                else { Assert(false); bError = true; }
-            }
-            else { Assert(false); bError = true; }
-
-            ReadIdx++;
+            if (Stack.IsEmpty()) { bEnd = true; } // Mark end if root object is closed
         } break;
 
         case JSONToken_RightSquare:
@@ -687,10 +654,13 @@ void RunTests_ExampleGlossary(JSONObject* Root);
 
 int main()
 {
-    FileContentsT JSONText = ReadFileContents("test/example_glossary.json", true);
-    JSONObject Root = JSONParse(JSONText);
+    FileContentsT JSONText_Glossary = ReadFileContents("test/example_glossary.json", true);
+    JSONObject Root_Glossary = JSONParse(JSONText_Glossary);
 
-    RunTests_ExampleGlossary(&Root);
+    RunTests_ExampleGlossary(&Root_Glossary);
+
+    FileContentsT JSONText_SimpleLists = ReadFileContents("test/example_simple_lists.json", true);
+    JSONObject Root_SimpleLists = JSONParse(JSONText_SimpleLists);
 
     return 0;
 }
