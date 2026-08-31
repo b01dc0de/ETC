@@ -1,28 +1,5 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
-using f32 = float;
-using f64 = double;
-
-#define Assert(Exp) if (!(Exp)) { __debugbreak(); }
-
-struct FileContentsT
-{
-    u64 Size;
-    u8* Contents;
-};
+#include "Common.h"
+#include "Tests.h"
 
 FileContentsT ReadFileContents(const char* FileName, bool bAppendZero)
 {
@@ -48,94 +25,6 @@ FileContentsT ReadFileContents(const char* FileName, bool bAppendZero)
 
     return Result;
 }
-
-template <typename T>
-struct DynamicArray
-{
-    u64 Capacity;
-    u64 Size;
-    T* Data;
-
-    static constexpr u64 DefaultCapacity = 16;
-
-    DynamicArray()
-    {
-        Capacity = DefaultCapacity;
-        Size = 0;
-        Data = new T[Capacity];
-    }
-
-    ~DynamicArray()
-    {
-        if (Data) { delete[] Data; }
-    }
-
-    T& operator[](int Idx)
-    {
-        return Data[Idx];
-    }
-
-    void Grow()
-    {
-        u64 OldCapacity = Capacity;
-        T* OldData = Data;
-
-        Capacity = Capacity * 2;
-        Data = new T[Capacity];
-        memcpy(Data, OldData, sizeof(T) * Size);
-        delete[] OldData;
-    }
-
-    void Add(T Item)
-    {
-        if (Size == Capacity) { Grow(); }
-
-        Data[Size] = Item;
-        Size++;
-    }
-
-    T& Last()
-    {
-        return Data[Size - 1];
-    }
-};
-
-enum JSONType
-{
-    JSONType_Unspecified,
-    JSONType_Object,
-    JSONType_Array,
-    JSONType_String,
-    JSONType_NumberInt,
-    JSONType_NumberFloat,
-    JSONType_Boolean,
-    JSONType_Null,
-    JSONType_Error
-};
-
-struct JSONObject;
-
-struct JSONValue
-{
-    JSONType Type;
-    union
-    {
-        DynamicArray<JSONObject*>* List;
-        char* String;
-        s64 NumberInt;
-        f64 NumberFloat;
-        u64 Boolean;
-    };
-};
-
-struct JSONObject
-{
-    char* Key = nullptr;
-    JSONValue Value;
-
-    JSONObject* GetProperty(const char* Key);
-    JSONObject* GetItem(int Idx);
-};
 
 JSONObject* JSONObject::GetProperty(const char* Key)
 {
@@ -184,7 +73,7 @@ struct JSONObjectStack
     bool IsEmpty() { return Stack.Size == 0; }
     void Push(JSONObject* NewObject) { Stack.Add(NewObject); }
     void Pop() { Assert(!IsEmpty()); if (!IsEmpty()) { Stack[Stack.Size - 1] = {}; Stack.Size--; } }
-    JSONObject* Top() { JSONObject* Result = nullptr; if (!IsEmpty()) { return Stack[Stack.Size - 1]; } }
+    JSONObject* Top() { JSONObject* Result = nullptr; if (!IsEmpty()) { Result = Stack[Stack.Size - 1]; } return Result; }
 };
 
 struct JSONParseContext
@@ -676,8 +565,6 @@ JSONObject JSONParse(FileContentsT JSONContents)
     return Context.Root;
 }
 
-void RunTests_ExampleGlossary(JSONObject* Root);
-
 int main()
 {
     FileContentsT JSONText_Glossary = ReadFileContents("test/example_glossary.json", true);
@@ -688,103 +575,5 @@ int main()
     FileContentsT JSONText_SimpleLists = ReadFileContents("test/example_simple_lists.json", true);
     JSONObject Root_SimpleLists = JSONParse(JSONText_SimpleLists);
 
-    __debugbreak();
-
     return 0;
 }
-
-bool Helper_StringCompare(const char* Expected, char* String)
-{
-    if (Expected == String) { return true; }
-    if (Expected && String) { return strcmp(Expected, String) == 0; }
-    return false;
-}
-
-#define JSON_KEY_CHECK(Object, InKey) Assert(Helper_StringCompare(InKey, Object->Key))
-#define JSON_TYPE_CHECK(Object, InType) Assert(Object->Value.Type == InType)
-#define JSON_SIZE_CHECK(Object, InSize) Assert(Object->Value.List->Size == InSize)
-
-#define JSON_TYPE_SIZE_CHECK(Object, InType, InSize)\
-    JSON_TYPE_CHECK(Object, InType);\
-    JSON_SIZE_CHECK(Object, InSize)
-
-#define JSON_KEY_TYPE_SIZE_CHECK(Object, InKey, InType, InSize)\
-    JSON_KEY_CHECK(Object, InKey);\
-    JSON_TYPE_SIZE_CHECK(Object, InType, InSize)
-
-#define JSON_STRING_CHECK(Object, InString)\
-    JSON_TYPE_CHECK(Object, JSONType_String);\
-    Assert(Helper_StringCompare(InString, Object->Value.String))
-
-void RunTests_ExampleGlossary(JSONObject* Root)
-{
-    Assert(Root->Key == nullptr);
-    JSON_TYPE_SIZE_CHECK(Root, JSONType_Object, 1);
-    
-    JSONObject* Glossary = Root->Value.List->Data[0];
-    JSON_KEY_CHECK(Glossary, "glossary");
-    JSON_TYPE_SIZE_CHECK(Glossary, JSONType_Object, 2);
-
-    JSONObject* Title = Glossary->Value.List->Data[0];
-    JSON_KEY_CHECK(Title, "title");
-    JSON_STRING_CHECK(Title, "example glossary");
-
-    JSONObject* GlossDiv = Glossary->Value.List->Data[1];
-    JSON_KEY_CHECK(GlossDiv, "GlossDiv");
-    JSON_TYPE_SIZE_CHECK(GlossDiv, JSONType_Object, 2);
-
-    JSONObject* GlossDiv_Title = GlossDiv->Value.List->Data[0];
-    JSON_KEY_CHECK(GlossDiv_Title, "title");
-    JSON_STRING_CHECK(GlossDiv_Title, "S");
-
-    JSONObject* GlossList = GlossDiv->Value.List->Data[1];
-    JSON_KEY_CHECK(GlossList, "GlossList");
-    JSON_TYPE_SIZE_CHECK(GlossList, JSONType_Object, 1);
-
-    JSONObject* GlossEntry = GlossList->Value.List->Data[0];
-    JSON_KEY_CHECK(GlossEntry, "GlossEntry");
-    JSON_TYPE_SIZE_CHECK(GlossEntry, JSONType_Object, 7);
-
-    JSONObject* ID = GlossEntry->Value.List->Data[0];
-    JSON_KEY_CHECK(ID, "ID");
-    JSON_STRING_CHECK(ID, "SGML");
-
-    JSONObject* SortAs = GlossEntry->Value.List->Data[1];
-    JSON_KEY_CHECK(SortAs , "SortAs");
-    JSON_STRING_CHECK(SortAs , "SGML");
-
-    JSONObject* GlossTerm = GlossEntry->Value.List->Data[2];
-    JSON_KEY_CHECK(GlossTerm, "GlossTerm");
-    JSON_STRING_CHECK(GlossTerm, "Standard Generalized Markup Language");
-
-    JSONObject* Acronym = GlossEntry->Value.List->Data[3];
-    JSON_KEY_CHECK(Acronym, "Acronym");
-    JSON_STRING_CHECK(Acronym, "SGML");
-
-    JSONObject* Abbrev = GlossEntry->Value.List->Data[4];
-    JSON_KEY_CHECK(Abbrev, "Abbrev");
-    JSON_STRING_CHECK(Abbrev, "ISO 8879:1986");
-
-    JSONObject* GlossDef = GlossEntry->Value.List->Data[5];
-    JSON_KEY_TYPE_SIZE_CHECK(GlossDef, "GlossDef", JSONType_Object, 2);
-
-    JSONObject* Para = GlossDef->Value.List->Data[0];
-    JSON_KEY_CHECK(Para, "para");
-    JSON_STRING_CHECK(Para, "A meta-markup language, used to...");
-
-    JSONObject* GlossSeeAlso = GlossDef->Value.List->Data[1];
-    JSON_KEY_TYPE_SIZE_CHECK(GlossSeeAlso, "GlossSeeAlso", JSONType_Array, 2);
-
-    JSONObject* GML = GlossSeeAlso->Value.List->Data[0];
-    JSON_KEY_CHECK(GML, nullptr);
-    JSON_STRING_CHECK(GML, "GML");
-
-    JSONObject* XML = GlossSeeAlso->Value.List->Data[1];
-    JSON_KEY_CHECK(XML, nullptr);
-    JSON_STRING_CHECK(XML, "XML");
-
-    JSONObject* GlossSee = GlossEntry->Value.List->Data[6];
-    JSON_KEY_CHECK(GlossSee, "GlossSee");
-    JSON_STRING_CHECK(GlossSee, "markup");
-}
-
