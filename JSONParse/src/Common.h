@@ -118,6 +118,13 @@ struct JSONObject
 
     JSONObject* GetProperty(const char* Key);
     JSONObject* GetItem(int Idx);
+
+    DynamicArray<JSONObject*>& GetList();
+    char*& GetString();
+    s64& GetInt();
+    f64& GetFloat();
+    u64& GetBool();
+    bool IsNull();
 };
 
 #endif // COMMON_H

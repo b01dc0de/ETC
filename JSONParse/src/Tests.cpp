@@ -34,27 +34,23 @@ bool Helper_DumbFloatCompare(double Expected, double Value)
 
 #define JSON_STRING_CHECK(Object, InString)\
     Assert(Object);\
-    JSON_TYPE_CHECK(Object, JSONType_String);\
-    Assert(Helper_StringCompare(InString, Object->Value.String))
+    Assert(Helper_StringCompare(InString, Object->GetString()))
 
 #define JSON_INT_CHECK(Object, InInteger)\
     Assert(Object);\
-    JSON_TYPE_CHECK(Object, JSONType_NumberInt);\
-    Assert(Object->Value.NumberInt == InInteger)
+    Assert(Object->GetInt() == InInteger)
 
 #define JSON_FLOAT_CHECK(Object, InFloat)\
     Assert(Object);\
-    JSON_TYPE_CHECK(Object, JSONType_NumberFloat);\
-    Assert(Helper_DumbFloatCompare(InFloat, Object->Value.NumberFloat));
+    Assert(Helper_DumbFloatCompare(InFloat, Object->GetFloat()));
 
 #define JSON_BOOL_CHECK(Object, InBool)\
     Assert(Object);\
-    JSON_TYPE_CHECK(Object, JSONType_Boolean);\
-    Assert(Object->Value.Boolean == InBool)
+    Assert(Object->GetBool() == InBool)
 
 #define JSON_NULL_CHECK(Object)\
     Assert(Object);\
-    JSON_TYPE_CHECK(Object, JSONType_Null)
+    Assert(Object->IsNull())
 
 
 void RunTests_ExampleGlossary(JSONObject* Root)
