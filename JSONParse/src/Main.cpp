@@ -132,7 +132,33 @@ struct JSONObject
 {
     char* Key = nullptr;
     JSONValue Value;
+
+    JSONObject* GetProperty(const char* Key);
+    JSONObject* GetItem(int Idx);
 };
+
+JSONObject* JSONObject::GetProperty(const char* Key)
+{
+    Assert(Value.Type == JSONType_Object && Value.List && Key);
+
+    JSONObject* Result = nullptr;
+
+    for (int Idx = 0; Key && Idx < Value.List->Size; Idx++)
+    {
+        if (strcmp(Key, Value.List->Data[Idx]->Key) == 0) { Result = Value.List->Data[Idx]; break; }
+    }
+
+    return Result;
+}
+
+JSONObject* JSONObject::GetItem(int Idx)
+{
+    Assert(Value.Type == JSONType_Array && Value.List && Idx < Value.List->Size);
+
+    JSONObject* Result = nullptr;
+    if (Idx < Value.List->Size) { Result = Value.List->Data[Idx]; }
+    return Result;
+}
 
 enum JSONToken
 {
@@ -662,18 +688,15 @@ int main()
     FileContentsT JSONText_SimpleLists = ReadFileContents("test/example_simple_lists.json", true);
     JSONObject Root_SimpleLists = JSONParse(JSONText_SimpleLists);
 
+    __debugbreak();
+
     return 0;
 }
 
 bool Helper_StringCompare(const char* Expected, char* String)
 {
     if (Expected == String) { return true; }
-    if (Expected && String)
-    {
-        int Idx = 0;
-        while (Expected[Idx] && String[Idx] && Expected[Idx] == String[Idx]) { Idx++; }
-        return Expected[Idx] == String[Idx];
-    }
+    if (Expected && String) { return strcmp(Expected, String) == 0; }
     return false;
 }
 
